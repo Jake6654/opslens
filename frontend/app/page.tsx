@@ -12,12 +12,17 @@ type LogSummary = {
   infoCount: number;
 };
 
-async function getLogs(level?: string): Promise<LogItem[]> {
-  const url = level
-    ? `http://localhost:8080/logs?level=${level}`
-    : "http://localhost:8080/logs";
+const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
-  const res = await fetch(url, {
+if (!baseUrl) {
+  throw new Error("NEXT_PUBLIC_API_URL is not defined");
+}
+
+async function getLogs(level?: string): Promise<LogItem[]> {
+  const logsUrl = new URL(`${baseUrl}/logs`);
+  if (level) logsUrl.searchParams.set("level", level);
+
+  const res = await fetch(logsUrl.toString(), {
     cache: "no-store",
   });
 
@@ -29,7 +34,7 @@ async function getLogs(level?: string): Promise<LogItem[]> {
 }
 
 async function getSummary(): Promise<LogSummary> {
-  const res = await fetch("http://localhost:8080/logs/summary", {
+  const res = await fetch(`${baseUrl}/logs/summary`, {
     cache: "no-store",
   });
 
