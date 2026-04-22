@@ -2,6 +2,7 @@ package com.opslens.controller;
 
 
 import com.opslens.model.LogItem;
+import com.opslens.model.LogSummary;
 import com.opslens.service.LogService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,4 +34,11 @@ public class HealthController {
     ){
         return logService.getLogs(level);
     }
+
+    @GetMapping("/logs/summary")
+    public LogSummary getLogSummary() {
+        return logService.getLogSummary();
+    }
+
+
 }
