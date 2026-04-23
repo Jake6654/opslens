@@ -19,28 +19,14 @@ if (!baseUrl) {
 }
 
 async function getLogs(level?: string): Promise<LogItem[]> {
-  const logsUrl = new URL(`${baseUrl}/logs`);
-  if (level) logsUrl.searchParams.set("level", level);
+  const url = level ? `${baseUrl}/logs?level=${level}` : `${baseUrl}/logs`;
 
-  const res = await fetch(logsUrl.toString(), {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch logs");
-  }
-
+  const res = await safeFetch(url);
   return res.json();
 }
 
 async function getSummary(): Promise<LogSummary> {
-  const res = await fetch(`${baseUrl}/logs/summary`, {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch log summary");
-  }
+  const res = await safeFetch(`${baseUrl}/logs/summary`);
 
   return res.json();
 }
@@ -56,6 +42,38 @@ function getBadgeClass(level: string) {
     default:
       return "bg-gray-100 text-gray-700";
   }
+}
+
+// this function retries to send a request at most 5 times
+// delay = 1000 = 1s
+async function safeFetch(
+  url: string,
+  options?: RequestInit,
+  retries = 5,
+  delay = 1000
+) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      if (attempt === retries) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error("Unexpected fetch failure");
 }
 
 export default async function Home({
