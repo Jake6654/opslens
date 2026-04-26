@@ -48,4 +48,9 @@ public class LogService {
 
         return new LogSummary(logs.size(), errorCount, warnCount, infoCount);
     }
+
+
+    public LogItem saveLog(LogItem logItem){
+        return logRepository.save(logItem);
+    }
 }
