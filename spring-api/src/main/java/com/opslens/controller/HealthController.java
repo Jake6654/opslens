@@ -4,9 +4,8 @@ package com.opslens.controller;
 import com.opslens.model.LogItem;
 import com.opslens.model.LogSummary;
 import com.opslens.service.LogService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.hibernate.validator.internal.util.logging.Log;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -38,6 +37,12 @@ public class HealthController {
     @GetMapping("/logs/summary")
     public LogSummary getLogSummary() {
         return logService.getLogSummary();
+    }
+
+    @PostMapping("/logs")
+    public LogItem createLog(@RequestBody LogItem logItem
+    ) {
+        return logService.saveLog(logItem);
     }
 
 
