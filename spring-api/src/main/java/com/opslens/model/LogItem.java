@@ -20,16 +20,25 @@ public class LogItem {
     private String service;
     private String message;
 
+    private String project;
+    private String environment;
+
     //
     public LogItem() {
 
     }
 
-    public LogItem(String timestamp, String level, String service, String message) {
-        this.timestamp = timestamp;
-        this.level = level;
+    public LogItem(String environment, String project, String service, String level, String timestamp, String message) {
+        this.environment = environment;
+        this.project = project;
         this.service = service;
+        this.level = level;
+        this.timestamp = timestamp;
         this.message = message;
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public String getTimestamp() {
@@ -47,4 +56,21 @@ public class LogItem {
     public String getMessage() {
         return message;
     }
+
+    public String getProject() {
+        return project;
+    }
+
+    public String getEnvironment() {
+        return environment;
+    }
+
 }
+
+
+
+
+
+
+
+

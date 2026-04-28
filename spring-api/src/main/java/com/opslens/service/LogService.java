@@ -19,7 +19,16 @@ public class LogService {
         this.logRepository = logRepository;
     }
 
-    public List<LogItem> getLogs(String level){
+    public List<LogItem> getLogs(String level, String project, String environment){
+
+        if (project != null && environment != null) {
+            return logRepository.findByProjectAndEnvironment(project, environment);
+        }
+
+        if (project != null) {
+            return logRepository.findByProject(project);
+        }
+
         if (level == null || level.isBlank()){
             // Now data comes from the database
             // if there's no level filter, returns all logs
@@ -32,7 +41,7 @@ public class LogService {
 
     public LogSummary getLogSummary(){
         // instead of duplicating the log list, you call existing method and get all logs
-        List<LogItem> logs = getLogs(null);
+        List<LogItem> logs = getLogs(null, null, null);
 
         long errorCount = logs.stream()
                 .filter(log -> log.getLevel().equalsIgnoreCase("ERROR"))
