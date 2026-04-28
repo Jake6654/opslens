@@ -4,20 +4,20 @@ package com.opslens.controller;
 import com.opslens.model.LogItem;
 import com.opslens.model.LogSummary;
 import com.opslens.service.LogService;
-import org.hibernate.validator.internal.util.logging.Log;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 
 @RestController
-public class HealthController {
+public class LogController {
 
     // Construction injection
     // means the controller needs a LogService, and Spring provides it
     private final LogService logService;
 
-    public HealthController(LogService logService) {
+    public LogController(LogService logService) {
         this.logService = logService;
     }
 
@@ -40,9 +40,16 @@ public class HealthController {
     }
 
     @PostMapping("/logs")
-    public LogItem createLog(@RequestBody LogItem logItem
-    ) {
-        return logService.saveLog(logItem);
+    public ResponseEntity<?> createLog(
+            @RequestHeader("x-api-key") String apiKey,
+            @RequestBody LogItem logItem
+    ){
+        String expectedApiKey = System.getenv("API_KEY");
+
+        if (expectedApiKey == null || !expectedApiKey.equals(apiKey)) {
+            return ResponseEntity.status(401).body("Invalid API key");
+        }
+        return ResponseEntity.ok(logService.saveLog(logItem));
     }
 
 
