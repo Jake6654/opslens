@@ -19,6 +19,7 @@ public class LogService {
         this.logRepository = logRepository;
     }
 
+    // filtering many logs
     public List<LogItem> getLogs(String level, String project, String environment){
 
         if (project != null && environment != null) {
@@ -61,5 +62,11 @@ public class LogService {
 
     public LogItem saveLog(LogItem logItem){
         return logRepository.save(logItem);
+    }
+
+    // fetching exactly one log
+    public LogItem getLogByID(Long id) {
+        return logRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Log no found with id: " + id));
     }
 }

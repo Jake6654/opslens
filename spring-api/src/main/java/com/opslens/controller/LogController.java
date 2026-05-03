@@ -29,9 +29,12 @@ public class LogController {
     @GetMapping("/logs")
     public List<LogItem> getLogs(
             // Read level from URL query parameter
-            @RequestParam(required = false) String level
+            @RequestParam(required = false) String level,
+            @RequestParam(required = false) String project,
+            @RequestParam(required = false) String environment
+            
     ){
-        return logService.getLogs(level);
+        return logService.getLogs(level, project, environment);
     }
 
     @GetMapping("/logs/summary")
@@ -50,6 +53,12 @@ public class LogController {
             return ResponseEntity.status(401).body("Invalid API key");
         }
         return ResponseEntity.ok(logService.saveLog(logItem));
+    }
+
+    @GetMapping("/logs/{id}")
+    // @PathVariable enable to take the value from the URL
+    public LogItem getLogById(@PathVariable Long id){
+        return logService.getLogByID(id);
     }
 
 
