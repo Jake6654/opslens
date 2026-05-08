@@ -1,8 +1,15 @@
+import LogTable from "./components/LogTable";
+
+export const dynamic = "force-dynamic";
+
 type LogItem = {
+  id: number;
   timestamp: string;
   level: string;
   service: string;
   message: string;
+  project: string | null;
+  environment: string | null;
 };
 
 type LogSummary = {
@@ -12,40 +19,34 @@ type LogSummary = {
   infoCount: number;
 };
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-
-if (!baseUrl) {
-  throw new Error("NEXT_PUBLIC_API_URL is not defined");
+function getServerBaseUrl() {
+  return (
+    process.env.API_INTERNAL_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:8080"
+  ).replace(/\/$/, "");
 }
 
 async function getLogs(level?: string): Promise<LogItem[]> {
-  const url = level ? `${baseUrl}/logs?level=${level}` : `${baseUrl}/logs`;
+  const baseUrl = getServerBaseUrl();
+
+  const url = level
+    ? `${baseUrl}/logs?level=${encodeURIComponent(level)}`
+    : `${baseUrl}/logs`;
 
   const res = await safeFetch(url);
   return res.json();
 }
 
 async function getSummary(): Promise<LogSummary> {
-  const res = await safeFetch(`${baseUrl}/logs/summary`);
+  const baseUrl = getServerBaseUrl();
 
+  const res = await safeFetch(`${baseUrl}/logs/summary`);
   return res.json();
 }
 
-function getBadgeClass(level: string) {
-  switch (level.toUpperCase()) {
-    case "ERROR":
-      return "bg-red-100 text-red-700";
-    case "WARN":
-      return "bg-yellow-100 text-yellow-700";
-    case "INFO":
-      return "bg-blue-100 text-blue-700";
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
-}
-
-// this function retries to send a request at most 5 times
-// delay = 1000 = 1s
+// This function retries a request at most 5 times.
+// delay = 1000 means 1 second.
 async function safeFetch(
   url: string,
   options?: RequestInit,
@@ -157,51 +158,7 @@ export default async function Home({
           })}
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">Logs</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {selectedLevel
-                ? `Showing ${selectedLevel} logs`
-                : "Showing all logs"}
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Time</th>
-                  <th className="px-5 py-3 font-medium">Level</th>
-                  <th className="px-5 py-3 font-medium">Service</th>
-                  <th className="px-5 py-3 font-medium">Message</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {logs.map((log, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-5 py-4 text-gray-600">
-                      {log.timestamp}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getBadgeClass(
-                          log.level
-                        )}`}
-                      >
-                        {log.level}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-4 text-gray-700">
-                      {log.service}
-                    </td>
-                    <td className="px-5 py-4 text-gray-800">{log.message}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <LogTable logs={logs} />
       </div>
     </main>
   );
