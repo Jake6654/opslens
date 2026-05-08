@@ -27,6 +27,7 @@ public class LogController {
     }
 
     @GetMapping("/logs")
+    // This method is for filtering lists of logs
     public List<LogItem> getLogs(
             // Read level from URL query parameter
             @RequestParam(required = false) String level,
@@ -57,8 +58,12 @@ public class LogController {
 
     @GetMapping("/logs/{id}")
     // @PathVariable enable to take the value from the URL
-    public LogItem getLogById(@PathVariable Long id){
-        return logService.getLogByID(id);
+    // Using ResponseEntity return response based on a result instead of returning null directly
+    public ResponseEntity<LogItem> getLogById(@PathVariable Long id){
+        return logService.getLogByID(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+
     }
 
 

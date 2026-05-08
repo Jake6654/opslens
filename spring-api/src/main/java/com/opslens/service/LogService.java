@@ -7,6 +7,7 @@ import com.opslens.repository.LogRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class LogService {
@@ -65,8 +66,8 @@ public class LogService {
     }
 
     // fetching exactly one log
-    public LogItem getLogByID(Long id) {
-        return logRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Log no found with id: " + id));
+    // Optional<LogItem> means Maybe the log exists or does not exist
+    public Optional<LogItem> getLogByID(Long id) {
+        return logRepository.findById(id);
     }
 }
