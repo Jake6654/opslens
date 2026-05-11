@@ -1,4 +1,5 @@
 import LogTable from "./components/LogTable";
+import FilterSelect from "./components/FilterSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,23 @@ function getServerBaseUrl() {
   ).replace(/\/$/, "");
 }
 
-async function getLogs(level?: string): Promise<LogItem[]> {
+async function getLogs(
+  level?: string,
+  project?: string,
+  environment?: string
+): Promise<LogItem[]> {
   const baseUrl = getServerBaseUrl();
 
-  const url = level
-    ? `${baseUrl}/logs?level=${encodeURIComponent(level)}`
+  const queryParams = new URLSearchParams();
+
+  if (level) queryParams.set("level", level);
+  if (project) queryParams.set("project", project);
+  if (environment) queryParams.set("environment", environment);
+
+  const queryString = queryParams.toString();
+
+  const url = queryString
+    ? `${baseUrl}/logs?${queryString}`
     : `${baseUrl}/logs`;
 
   const res = await safeFetch(url);
@@ -45,8 +58,6 @@ async function getSummary(): Promise<LogSummary> {
   return res.json();
 }
 
-// This function retries a request at most 5 times.
-// delay = 1000 means 1 second.
 async function safeFetch(
   url: string,
   options?: RequestInit,
@@ -80,13 +91,20 @@ async function safeFetch(
 export default async function Home({
   searchParams,
 }: {
-  searchParams?: Promise<{ level?: string }>;
+  searchParams?: Promise<{
+    level?: string;
+    project?: string;
+    environment?: string;
+  }>;
 }) {
   const params = await searchParams;
+
   const selectedLevel = params?.level;
+  const selectedProject = params?.project;
+  const selectedEnvironment = params?.environment;
 
   const [logs, summary] = await Promise.all([
-    getLogs(selectedLevel),
+    getLogs(selectedLevel, selectedProject, selectedEnvironment),
     getSummary(),
   ]);
 
@@ -139,8 +157,20 @@ export default async function Home({
             const isActive =
               (filter === "ALL" && !selectedLevel) || selectedLevel === filter;
 
-            const href =
-              filter === "ALL" ? "/" : `/?level=${encodeURIComponent(filter)}`;
+            const queryParams = new URLSearchParams();
+
+            if (selectedProject) queryParams.set("project", selectedProject);
+            if (selectedEnvironment) {
+              queryParams.set("environment", selectedEnvironment);
+            }
+
+            if (filter !== "ALL") {
+              queryParams.set("level", filter);
+            }
+
+            const href = queryParams.toString()
+              ? `/?${queryParams.toString()}`
+              : "/";
 
             return (
               <a
@@ -158,7 +188,29 @@ export default async function Home({
           })}
         </section>
 
-        <LogTable logs={logs} />
+        <section className="mb-6 flex flex-wrap gap-3">
+          <FilterSelect
+            label="Project"
+            name="project"
+            value={selectedProject}
+            options={["budget-lens", "opslens"]}
+            selectedLevel={selectedLevel}
+            selectedProject={selectedProject}
+            selectedEnvironment={selectedEnvironment}
+          />
+
+          <FilterSelect
+            label="Environment"
+            name="environment"
+            value={selectedEnvironment}
+            options={["dev", "staging", "prod"]}
+            selectedLevel={selectedLevel}
+            selectedProject={selectedProject}
+            selectedEnvironment={selectedEnvironment}
+          />
+        </section>
+
+        <LogTable logs={logs} selectedLevel={selectedLevel} />
       </div>
     </main>
   );

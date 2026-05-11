@@ -22,22 +22,35 @@ public class LogService {
 
     // filtering many logs
     public List<LogItem> getLogs(String level, String project, String environment){
+        List<LogItem> logs = logRepository.findAll();
 
-        if (project != null && environment != null) {
-            return logRepository.findByProjectAndEnvironment(project, environment);
+        if (level != null && !level.isBlank()) {
+            logs = logs.stream()
+                    .filter(log -> log.getLevel() != null)
+                    .filter(log -> log.getLevel().equalsIgnoreCase(level))
+                    .toList();
+        }
+        // This condition checks the request parameter
+        // Did the user provide a project filter in the URL?
+        if (project != null && !project.isBlank())  {
+            logs = logs.stream()
+                    // This part is different
+                    // This checks the actual log data
+                    // Does this specific log object have a project value?
+                    .filter(log -> log.getProject() != null)
+                    .filter(log -> log.getProject().equalsIgnoreCase(project))
+                    .toList();
         }
 
-        if (project != null) {
-            return logRepository.findByProject(project);
+
+        if (environment != null && !environment.isBlank()){
+            logs = logs.stream()
+                    .filter(log -> log.getEnvironment() != null)
+                    .filter(log -> log.getEnvironment().equalsIgnoreCase(environment))
+                    .toList();
         }
 
-        if (level == null || level.isBlank()){
-            // Now data comes from the database
-            // if there's no level filter, returns all logs
-            return logRepository.findAll();
-        }
-
-        return logRepository.findByLevelIgnoreCase(level);
+        return logs;
     }
 
 

@@ -14,6 +14,7 @@ type LogItem = {
 
 type LogTableProps = {
   logs: LogItem[];
+  selectedLevel?: string;
 };
 
 function getBadgeClass(level: string) {
