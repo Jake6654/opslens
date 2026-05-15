@@ -6,6 +6,7 @@ echo "Rebuilding OpsLens containers..."
 
 docker compose down
 
+# starts the containers again and rebulds the images
 docker compose up --build -d
 
 echo "Waiting for services to start..."

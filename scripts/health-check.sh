@@ -4,7 +4,7 @@
 set -e
 
 # Use BACKEND_URL if it exists, otherwis use localhost8080
-# Bash variable
+# creates variables
 BACKEND_URL=${BACKEND_URL:-http://localhost:8080}
 FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
 
@@ -12,6 +12,8 @@ FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
 echo "Checking OpsLens sevices...."
 
 echo "Checking backend health at $BACKEND_URL/health"
+# curl sends an HTTP request to the backend health endpoint
+# > /dev/null hides the response body
 curl -f "$BACKEND_URL/health" > /dev/null
 
 echo "Backend is healthy."
