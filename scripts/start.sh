@@ -16,5 +16,5 @@ echo "Running health check..."
 ./scripts/health-check.sh
 
 echo "OpsLens is running."
-echo "Frontend: http://localhost:3000"
-echo "Backend:  http://localhost:8080"
+echo "Frontend: http://localhost:3001"
+echo "Backend:  http://localhost:8081"

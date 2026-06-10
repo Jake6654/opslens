@@ -193,7 +193,7 @@ export default async function Home({
             label="Project"
             name="project"
             value={selectedProject}
-            options={["budget-lens", "opslens"]}
+            options={["budget-lens", "opslens", "sketch-my-day"]}
             selectedLevel={selectedLevel}
             selectedProject={selectedProject}
             selectedEnvironment={selectedEnvironment}
