@@ -5,8 +5,8 @@ set -e
 
 # Use BACKEND_URL if it exists, otherwis use localhost8080
 # creates variables
-BACKEND_URL=${BACKEND_URL:-http://localhost:8080}
-FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+BACKEND_URL=${BACKEND_URL:-http://localhost:8081}
+FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
 
 
 echo "Checking OpsLens sevices...."

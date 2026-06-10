@@ -2,7 +2,7 @@
 
 set -e
 
-BACKEND_URL=${BACKEND_URL:-http://localhost:8080}
+BACKEND_URL=${BACKEND_URL:-http://localhost:8081}
 
 if [ ! -f ".env" ]; then
   echo "Error: .env file not found."
