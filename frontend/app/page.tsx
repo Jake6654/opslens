@@ -1,5 +1,6 @@
 import LogTable from "./components/LogTable";
 import FilterSelect from "./components/FilterSelect";
+import IncidentTable from "./components/IncidentTable";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,20 @@ type LogSummary = {
   infoCount: number;
 };
 
+// Define the expected object structure
+type Incident = {
+  id: number;
+  sourceLogId: number;
+  project: string | null;
+  environment: string | null;
+  service: string | null;
+  severity: string;
+  status: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 function getServerBaseUrl() {
   return (
     process.env.API_INTERNAL_URL ??
@@ -28,10 +43,19 @@ function getServerBaseUrl() {
   ).replace(/\/$/, "");
 }
 
+async function getIncidents(): Promise<Incident[]> {
+  const baseUrl = getServerBaseUrl();
+
+  const res = await safeFetch(`${baseUrl}/incidents`);
+  return res.json();
+}
+
+// The dashboard needs to fetch incidents from Spring Boot
 async function getLogs(
   level?: string,
   project?: string,
   environment?: string
+  // This function eventually returns an array of Incident objects
 ): Promise<LogItem[]> {
   const baseUrl = getServerBaseUrl();
 
@@ -103,10 +127,16 @@ export default async function Home({
   const selectedProject = params?.project;
   const selectedEnvironment = params?.environment;
 
-  const [logs, summary] = await Promise.all([
+  // Start all async calls at the same time and wait until all are done
+  const [logs, summary, incidents] = await Promise.all([
     getLogs(selectedLevel, selectedProject, selectedEnvironment),
     getSummary(),
+    getIncidents(),
   ]);
+
+  const openIncidentCount = incidents.filter(
+    (incident) => incident.status?.toUpperCase() === "OPEN"
+  ).length;
 
   const filters = ["ALL", "ERROR", "WARN", "INFO"];
 
@@ -209,7 +239,25 @@ export default async function Home({
             selectedEnvironment={selectedEnvironment}
           />
         </section>
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">Total Incidents</p>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">
+              {incidents.length}
+            </p>
+          </div>
 
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">Open Incidents</p>
+            <p className="mt-2 text-2xl font-semibold text-red-600">
+              {openIncidentCount}
+            </p>
+          </div>
+        </section>
+
+        <div className="mb-8">
+          <IncidentTable incidents={incidents} />
+        </div>
         <LogTable logs={logs} selectedLevel={selectedLevel} />
       </div>
     </main>
