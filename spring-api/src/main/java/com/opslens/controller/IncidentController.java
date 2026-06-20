@@ -19,6 +19,7 @@ public class IncidentController {
     }
 
     @PostMapping("/from-log/{logId}")
+    // Read logId from the URL path
     public ResponseEntity<?> createdIncidentFromLog(@PathVariable Long logId) {
         try {
             Incident incident = incidentService.createIncidentFromLog(logId);
