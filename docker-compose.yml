@@ -48,6 +48,22 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+  ai-orchestrator:
+    build: ./ai-orchestrator
+    container_name: opslens-ai-orchestrator
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   opslens-postgres-data:
