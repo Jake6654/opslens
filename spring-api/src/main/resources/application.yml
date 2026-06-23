@@ -14,3 +14,7 @@ spring:
 
 server:
   port: ${PORT:8080}
+
+ai:
+  orchestrator:
+    url: ${AI_ORCHESTRATOR_URL:http://localhost:8002}

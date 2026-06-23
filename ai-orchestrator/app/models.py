@@ -1,9 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AnalyzeLogRequest(BaseModel):
-    incident_id: int
-    log_id: int
+    model_config = ConfigDict(populate_by_name=True)
+
+    incident_id: int = Field(alias="incidentId")
+    log_id: int = Field(alias="logId")
     project: str | None = None
     environment: str | None = None
     service: str | None = None
