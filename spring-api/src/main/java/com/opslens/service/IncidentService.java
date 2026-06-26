@@ -1,5 +1,8 @@
 package com.opslens.service;
 
+import com.opslens.ai.AiOrchestratorClient;
+import com.opslens.ai.AnalyzeLogRequest;
+import com.opslens.ai.AnalyzeLogResponse;
 import com.opslens.model.Incident;
 import com.opslens.model.IncidentReport;
 import com.opslens.model.LogItem;
@@ -18,11 +21,13 @@ public class IncidentService {
     private final LogRepository logRepository;
     private final IncidentRepository incidentRepository;
     private final IncidentReportRepository incidentReportRepository;
+    private final AiOrchestratorClient aiOrchestratorClient;
 
-    public IncidentService(LogRepository logRepository, IncidentRepository incidentRepository, IncidentReportRepository incidentReportRepository) {
+    public IncidentService(LogRepository logRepository, IncidentRepository incidentRepository, IncidentReportRepository incidentReportRepository, AiOrchestratorClient aiOrchestratorClient) {
         this.logRepository = logRepository;
         this.incidentRepository = incidentRepository;
         this.incidentReportRepository = incidentReportRepository;
+        this.aiOrchestratorClient = aiOrchestratorClient;
     }
 
     public Incident createIncidentFromLog(Long logId){
@@ -40,15 +45,42 @@ public class IncidentService {
         );
 
         Incident savedIncident = incidentRepository.save(incident);
+        IncidentReport report;
 
-        IncidentReport report = new IncidentReport(
-                savedIncident.getId(),
-                "Initial incident created from log.",
-                "AI analysis has not been run yet.",
-                "Run incident analysis to identify the likely root cause.",
-                0.0,
-                "{}"
-        );
+        // now incident comes from FastAPI instead of hardcoded Java placeholder text
+        try {
+            AnalyzeLogRequest analyzeRequest = new AnalyzeLogRequest(
+                    savedIncident.getId(),
+                    log.getId(),
+                    log.getProject(),
+                    log.getEnvironment(),
+                    log.getService(),
+                    log.getLevel(),
+                    log.getMessage()
+            );
+
+            AnalyzeLogResponse analyzeResponse = aiOrchestratorClient.analyzeLog(analyzeRequest);
+
+                report = new IncidentReport(
+                    savedIncident.getId(),
+                    analyzeResponse.getSummary(),
+                    analyzeResponse.getSuspectedRootCause(),
+                    analyzeResponse.getRecommendedAction(),
+                    analyzeResponse.getConfidence(),
+                    analyzeResponse.getRawResponse()
+            );
+
+        } catch (Exception e) {
+            System.out.println("AI orchestrator call failed: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            report = new IncidentReport(
+                    savedIncident.getId(),
+                    "Incident created, but AI orchestrator call failed.",
+                    "AI orchestrator was unavailable or returned an invalid response.",
+                    "Check ai-orchestrator service health and retry analysis later.",
+                    0.0,
+                    "{\"error\":\"ai_orchestrator_unavailable\"}"
+            );
+        }
 
         incidentReportRepository.save(report);
         return savedIncident;
