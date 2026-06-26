@@ -1,4 +1,15 @@
 package com.opslens.ai;
 
-public class CoderSearchResponse {
+import java.util.List;
+
+public class CodeSearchResponse {
+
+    private List<CodeSearchItem> results;
+
+    public CodeSearchResponse() {
+    }
+
+    public List<CodeSearchItem> getResults() {
+        return results;
+    }
 }
