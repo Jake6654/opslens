@@ -70,6 +70,47 @@ public class AiOrchestratorClient {
         }
     }
 
+    public CodeSearchResponse searchCode(CodeSearchRequest request) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("incident_id", request.getIncidentId());
+        payload.put("project", request.getProject());
+        payload.put("environment", request.getEnvironment());
+        payload.put("service", request.getService());
+        payload.put("severity", request.getSeverity());
+        payload.put("message", request.getMessage());
+        payload.put("analysis_summary", request.getAnalysisSummary());
+        payload.put("suspected_root_cause", request.getSuspectedRootCause());
+
+        String jsonBody = toJson(payload);
+
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(orchestratorUrl + "/search-code"))
+                .version(HttpClient.Version.HTTP_1_1)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        try {
+            HttpResponse<String> response = httpClient.send(
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "AI orchestrator returned " + response.statusCode() + ": " + response.body()
+                );
+            }
+
+            return objectMapper.readValue(response.body(), CodeSearchResponse.class);
+        } catch (IOException error) {
+            throw new IllegalStateException("Code search request failed", error);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Code search request was interrupted", error);
+        }
+    }
+
     private String toJson(Map<String, Object> payload) {
         try {
             return objectMapper.writeValueAsString(payload);
