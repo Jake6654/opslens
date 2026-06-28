@@ -18,5 +18,5 @@ def analyze_log_endpoint(request: AnalyzeLogRequest) -> AnalyzeLogResponse:
     return analyze_log(request)
 
 @app.post("/search-code", response_model=CodeSearchResponse)
-def search_code_endpoint(request: CodeSearchRequest) -> CodeSearchResponse:
-    return search_code(request)
+async def search_code_endpoint(request: CodeSearchRequest) -> CodeSearchResponse:
+    return await search_code(request)
