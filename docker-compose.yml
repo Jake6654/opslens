@@ -58,7 +58,13 @@ services:
       - "8002:8000"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # let you change the model without changing code
+      # Usse OPENAI_MODEL if it exists
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_REPOSITORY_OWNER: ${GITHUB_REPOSITORY_OWNER}
+      GITHUB_REPOSITORY_NAME: ${GITHUB_REPOSITORY_NAME}
+      GITHUB_DEFAULT_BRANCH: ${GITHUB_DEFAULT_BRANCH:-main}
     healthcheck:
       test:
         [
