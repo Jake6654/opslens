@@ -3,6 +3,30 @@ from app.models import CodeSearchItem, CodeSearchRequest, CodeSearchResponse
 from app.services.github_client import GitHubClient
 
 
+SUPPORTED_SOURCE_EXTENSIONS = (
+    ".java",
+    ".kt",
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".yml",
+    ".yaml",
+    ".properties",
+    ".xml",
+    ".sql",
+)
+
+EXCLUDED_PATH_PARTS = (
+    "/node_modules/",
+    "/build/",
+    "/dist/",
+    "/target/",
+    "/.next/",
+    "/.git/",
+)
+
 
 def placeholder_result(request: CodeSearchRequest) -> CodeSearchResponse:
     service = request.service or "ExampleService"
@@ -47,6 +71,9 @@ async def search_code(request: CodeSearchRequest) -> CodeSearchResponse:
             if not path or path in seen_paths:
                 continue
 
+            if not is_supported_source_file(path):
+                continue
+
             seen_paths.add(path)
 
             # Fetches the real source code from GitHub
@@ -76,6 +103,16 @@ async def search_code(request: CodeSearchRequest) -> CodeSearchResponse:
         return placeholder_result(request)
 
     return CodeSearchResponse(results=results)
+
+
+def is_supported_source_file(path: str) -> bool:
+    normalized_path = f"/{path.lower()}"
+
+    if any(excluded_part in normalized_path for excluded_part in EXCLUDED_PATH_PARTS):
+        return False
+
+    return normalized_path.endswith(SUPPORTED_SOURCE_EXTENSIONS)
+
 
 # This fuction decides what keywords tosearch in GitHub 
 def build_queries(request: CodeSearchRequest) -> list[str]:
