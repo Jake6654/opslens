@@ -1,31 +1,9 @@
 from app.models import CodeSearchItem, CodeSearchRequest, CodeSearchResponse
 
+from app.config import settings
 from app.services.github_client import GitHubClient
-
-
-SUPPORTED_SOURCE_EXTENSIONS = (
-    ".java",
-    ".kt",
-    ".py",
-    ".js",
-    ".jsx",
-    ".ts",
-    ".tsx",
-    ".yml",
-    ".yaml",
-    ".properties",
-    ".xml",
-    ".sql",
-)
-
-EXCLUDED_PATH_PARTS = (
-    "/node_modules/",
-    "/build/",
-    "/dist/",
-    "/target/",
-    "/.next/",
-    "/.git/",
-)
+from app.services.source_filter import is_supported_source_file
+from app.services.local_code_search_client import LocalCodeSearchClient
 
 
 def placeholder_result(request: CodeSearchRequest) -> CodeSearchResponse:
@@ -52,8 +30,13 @@ def placeholder_result(request: CodeSearchRequest) -> CodeSearchResponse:
         ]
     )
 
-
 async def search_code(request: CodeSearchRequest) -> CodeSearchResponse:
+    if settings.code_search_mode == "local":
+        return search_local_code(request)
+    return await search_github_code(request)
+
+
+async def search_github_code(request: CodeSearchRequest) -> CodeSearchResponse:
     github = GitHubClient()
     queries = build_queries(request)
 
@@ -104,14 +87,48 @@ async def search_code(request: CodeSearchRequest) -> CodeSearchResponse:
 
     return CodeSearchResponse(results=results)
 
+# local development
+def search_local_code(request: CodeSearchRequest) -> CodeSearchResponse:
+    client = LocalCodeSearchClient(settings.local_repository_path)
+    queries = build_queries(request)
 
-def is_supported_source_file(path: str) -> bool:
-    normalized_path = f"/{path.lower()}"
+    results: list[CodeSearchItem] = []
+    seen_paths: set[str] = set()
 
-    if any(excluded_part in normalized_path for excluded_part in EXCLUDED_PATH_PARTS):
-        return False
+    for query in queries:
+        local_items = client.search_code(query, limit=5)
 
-    return normalized_path.endswith(SUPPORTED_SOURCE_EXTENSIONS)
+        for item in local_items:
+            path = item["path"]
+
+            if path in seen_paths:
+                continue
+
+            seen_paths.add(path)
+
+            snippet = make_snippet(item["content"], query)
+
+            results.append(
+                CodeSearchItem(
+                    repository="local-workspace",
+                    file_path=path,
+                    symbol_name=request.service,
+                    snippet=snippet,
+                    relevance_reason=f"Matched local search query: {query}",
+                    score=0.75,
+                )
+            )
+
+            if len(results) >= 5:
+                break
+
+        if len(results) >= 5:
+            break
+
+    if not results:
+        return placeholder_result(request)
+
+    return CodeSearchResponse(results=results)
 
 
 # This fuction decides what keywords tosearch in GitHub 
