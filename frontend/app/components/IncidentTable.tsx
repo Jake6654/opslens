@@ -26,6 +26,18 @@ type IncidentReport = {
   createdAt: string;
 };
 
+type CodeSearchResult = {
+  id: number;
+  incidentId: number;
+  repository: string;
+  filePath: string;
+  symbolName: string | null;
+  snippet: string;
+  relevanceReason: string;
+  score: number;
+  createdAt: string;
+};
+
 type IncidentTableProps = {
   incidents: Incident[];
 };
@@ -40,14 +52,21 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [codeSearchResults, setCodeSearchResults] = useState<
+    CodeSearchResult[]
+  >([]);
+  const [isCodeSearchLoading, setIsCodeSearchLoading] = useState(false);
+  const [codeSearchError, setCodeSearchError] = useState("");
 
   async function handleIncidentClick(incident: Incident) {
     try {
       setIsOpen(true);
       setLoading(true);
       setError("");
+      setCodeSearchError("");
       setSelectedIncident(incident);
       setSelectedReport(null);
+      setCodeSearchResults([]);
 
       const response = await fetch(`/api/incidents/${incident.id}/report`);
 
@@ -62,12 +81,56 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     } finally {
       setLoading(false);
     }
+
+    try {
+      await fetchCodeSearchResults(incident.id);
+    } catch {
+      setCodeSearchError("Could not load code search results.");
+    }
+  }
+
+  // GET saved results
+  async function fetchCodeSearchResults(incidentId: number) {
+    const response = await fetch(`/api/incidents/${incidentId}/code-search`);
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch code search results");
+    }
+
+    const data: CodeSearchResult[] = await response.json();
+    setCodeSearchResults(data);
+  }
+
+  // POST to run a new search and save new results
+  async function runCodeSearch(incidentId: number) {
+    try {
+      setIsCodeSearchLoading(true);
+      setCodeSearchError("");
+
+      // Run code sarch
+      const response = await fetch(`/api/incidents/${incidentId}/code-search`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to run code search");
+      }
+
+      const data: CodeSearchResult[] = await response.json();
+      setCodeSearchResults(data);
+    } catch {
+      setCodeSearchError("Could not run code search.");
+    } finally {
+      setIsCodeSearchLoading(false);
+    }
   }
 
   function closePanel() {
     setIsOpen(false);
     setSelectedIncident(null);
     setSelectedReport(null);
+    setCodeSearchResults([]);
+    setCodeSearchError("");
     setError("");
   }
 
@@ -126,8 +189,8 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-          <aside className="h-full w-full max-w-md bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <aside className="flex h-full w-full max-w-md flex-col bg-white shadow-xl">
+            <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
                   Incident Report
@@ -145,7 +208,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
               </button>
             </div>
 
-            <div className="p-5">
+            <div className="flex-1 overflow-y-auto p-5">
               {loading && (
                 <p className="text-sm text-gray-500">
                   Loading incident report...
@@ -182,6 +245,58 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                     label="Confidence"
                     value={`${selectedReport.confidence}`}
                   />
+                  <button
+                    onClick={() => runCodeSearch(selectedIncident.id)}
+                    disabled={isCodeSearchLoading}
+                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  >
+                    {isCodeSearchLoading ? "Searching..." : "Run Code Search"}
+                  </button>
+                  {codeSearchError && (
+                    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {codeSearchError}
+                    </p>
+                  )}
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        Related Code
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Source files connected to this incident.
+                      </p>
+                    </div>
+
+                    {codeSearchResults.length === 0 ? (
+                      <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                        No code search results yet.
+                      </p>
+                    ) : (
+                      codeSearchResults.map((result) => (
+                        <article
+                          key={result.id}
+                          className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+                        >
+                          <div className="mb-2">
+                            <p className="break-all text-sm font-medium text-gray-900">
+                              {result.filePath}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {result.repository} · score {result.score}
+                            </p>
+                          </div>
+
+                          <p className="mb-2 text-xs text-gray-600">
+                            {result.relevanceReason}
+                          </p>
+
+                          <pre className="max-h-64 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
+                            <code>{result.snippet}</code>
+                          </pre>
+                        </article>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>
