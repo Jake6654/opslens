@@ -55,3 +55,27 @@ class CodeSearchItem(BaseModel):
 
 class CodeSearchResponse(BaseModel): 
     results: list[CodeSearchItem]
+
+class PatchCodeResult(BaseModel):
+    file_path: str
+    snippet: str
+    repository: str | None = None
+    relevance_reason: str | None = None
+    score: float | None = None
+
+
+class PatchSuggestionRequest(BaseModel):
+    incident_id: int
+    summary: str
+    suspected_root_cause: str
+    recommended_action: str
+    code_results: list[PatchCodeResult]
+
+
+class PatchSuggestionResponse(BaseModel):
+    incident_id: int
+    root_cause: str
+    patch_summary: str
+    suggested_diff: str
+    risk_level: str
+    requires_human_review: bool
