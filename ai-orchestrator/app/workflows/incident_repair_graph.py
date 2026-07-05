@@ -2,6 +2,8 @@ from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
 
+from app.services.patch_generator import generate_patch_suggestion
+
 
 class IncidentRepairState(TypedDict):
     incident_id: int
@@ -33,25 +35,7 @@ def root_cause_node(state: IncidentRepairState):
 
 
 def patch_suggestion_node(state: IncidentRepairState):
-    first_file = (
-        state["code_results"][0]["file_path"]
-        if state["code_results"]
-        else "unknown file"
-    )
-
-    return {
-        "patch_summary": (
-            "Review the related code and add validation around the failing path."
-        ),
-        "suggested_diff": (
-            f"--- a/{first_file}\n"
-            f"+++ b/{first_file}\n"
-            "@@ suggested change @@\n"
-            "+ Add null checks or input validation before saving.\n"
-        ),
-        "risk_level": "LOW",
-        "requires_human_review": True,
-    }
+    return generate_patch_suggestion(state)
 
 
 def build_incident_repair_graph():
