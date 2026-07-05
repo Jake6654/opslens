@@ -118,4 +118,47 @@ public class AiOrchestratorClient {
             throw new IllegalArgumentException("Could not serialize AI analysis request", error);
         }
     }
+
+    public PatchSuggestionResponse suggestPatch(PatchSuggestionRequest request){
+        // Build JSON Payload: convert Java object to JSON structure that FastAPI expects
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("incident_id", request.getIncidentId());
+        payload.put("summary", request.getSummary());
+        payload.put("suspected_root_cause", request.getSuspectedRootCause());
+        payload.put("recommended_action", request.getRecommendedAction());
+        payload.put("code_results", request.getCodeResults());
+
+        String jsonBody = toJson(payload);
+
+        // Build HTTP Request that spring boot is going to send it to FastAPI
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(orchestratorUrl + "/suggest-patch"))
+                .version(HttpClient.Version.HTTP_1_1)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        try{
+            // Send HTTP request
+            HttpResponse<String> response = httpClient.send(
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            // Check HTTP Status
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "AI orchestrator returned " + response.statusCode() + ": " + response.body()
+                );
+            }
+
+            // Parse JSON response to Java DTO
+            return  objectMapper.readValue(response.body(), PatchSuggestionResponse.class);
+        } catch (IOException error) {
+            throw new IllegalStateException("Patch suggestion request failed", error);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Patch suggestion request was interrupted", error);
+        }
+    }
 }
