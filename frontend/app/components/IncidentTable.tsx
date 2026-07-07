@@ -42,6 +42,19 @@ type IncidentTableProps = {
   incidents: Incident[];
 };
 
+type PatchSuggestion = {
+  id: number;
+  incidentId: number;
+  rootCause: string;
+  patchSummary: string;
+  suggestedDiff: string;
+  riskLevel: string;
+  requiresHumanReview: boolean;
+  createdAt: string;
+};
+
+type DetailTab = "report" | "code" | "patches";
+
 export default function IncidentTable({ incidents }: IncidentTableProps) {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(
     null
@@ -57,6 +70,12 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   >([]);
   const [isCodeSearchLoading, setIsCodeSearchLoading] = useState(false);
   const [codeSearchError, setCodeSearchError] = useState("");
+  const [patchSuggestions, setPatchSuggestions] = useState<PatchSuggestion[]>(
+    []
+  );
+  const [isPatchLoading, setIsPatchLoading] = useState(false);
+  const [patchError, setPatchError] = useState("");
+  const [activeTab, setActiveTab] = useState<DetailTab>("report");
 
   async function handleIncidentClick(incident: Incident) {
     try {
@@ -64,9 +83,14 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       setLoading(true);
       setError("");
       setCodeSearchError("");
+      setActiveTab("report");
       setSelectedIncident(incident);
       setSelectedReport(null);
       setCodeSearchResults([]);
+
+      // reset patch state here
+      setPatchSuggestions([]);
+      setPatchError("");
 
       const response = await fetch(`/api/incidents/${incident.id}/report`);
 
@@ -78,6 +102,14 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       setSelectedReport(data);
     } catch {
       setError("Could not load incident report.");
+    } finally {
+      setLoading(false);
+    }
+
+    try {
+      await fetchPatchSuggestions(incident.id);
+    } catch {
+      setPatchError("Could not load patch suggestions.");
     } finally {
       setLoading(false);
     }
@@ -125,12 +157,54 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     }
   }
 
+  async function fetchPatchSuggestions(incidentId: number) {
+    const response = await fetch(
+      `/api/incidents/${incidentId}/patch-suggestions`
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch patch suggestions");
+    }
+
+    const data: PatchSuggestion[] = await response.json();
+    setPatchSuggestions(data);
+  }
+
+  async function handleGeneratePatchSuggestion() {
+    if (!selectedIncident) return;
+
+    try {
+      setIsPatchLoading(true);
+      setPatchError("");
+
+      const response = await fetch(
+        `/api/incidents/${selectedIncident.id}/suggest-patch`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate patch suggestion");
+      }
+
+      await fetchPatchSuggestions(selectedIncident.id);
+    } catch {
+      setPatchError("Could not generate patch suggestion.");
+    } finally {
+      setIsPatchLoading(false);
+    }
+  }
+
   function closePanel() {
     setIsOpen(false);
     setSelectedIncident(null);
     setSelectedReport(null);
     setCodeSearchResults([]);
     setCodeSearchError("");
+    setPatchSuggestions([]);
+    setPatchError("");
+    setActiveTab("report");
     setError("");
   }
 
@@ -188,9 +262,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       </section>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-          <aside className="flex h-full w-full max-w-md flex-col bg-white shadow-xl">
-            <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-5 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <aside className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
                   Incident Report
@@ -208,7 +282,27 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="shrink-0 border-b border-gray-200 px-6 py-3">
+              <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                <TabButton
+                  label="Report"
+                  isActive={activeTab === "report"}
+                  onClick={() => setActiveTab("report")}
+                />
+                <TabButton
+                  label={`Related Code (${codeSearchResults.length})`}
+                  isActive={activeTab === "code"}
+                  onClick={() => setActiveTab("code")}
+                />
+                <TabButton
+                  label={`Patch Suggestions (${patchSuggestions.length})`}
+                  isActive={activeTab === "patches"}
+                  onClick={() => setActiveTab("patches")}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5">
               {loading && (
                 <p className="text-sm text-gray-500">
                   Loading incident report...
@@ -221,7 +315,10 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                 </p>
               )}
 
-              {!loading && selectedIncident && selectedReport && (
+              {!loading &&
+                selectedIncident &&
+                selectedReport &&
+                activeTab === "report" && (
                 <div className="space-y-4">
                   <DetailRow
                     label="Incident"
@@ -245,37 +342,45 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                     label="Confidence"
                     value={`${selectedReport.confidence}`}
                   />
-                  <button
-                    onClick={() => runCodeSearch(selectedIncident.id)}
-                    disabled={isCodeSearchLoading}
-                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
-                  >
-                    {isCodeSearchLoading ? "Searching..." : "Run Code Search"}
-                  </button>
+                </div>
+              )}
+
+              {!loading && selectedIncident && activeTab === "code" && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Related Code
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        Source files connected to this incident.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => runCodeSearch(selectedIncident.id)}
+                      disabled={isCodeSearchLoading}
+                      className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    >
+                      {isCodeSearchLoading ? "Searching..." : "Run Code Search"}
+                    </button>
+                  </div>
+
                   {codeSearchError && (
                     <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
                       {codeSearchError}
                     </p>
                   )}
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        Related Code
-                      </h3>
-                      <p className="text-xs text-gray-500">
-                        Source files connected to this incident.
-                      </p>
-                    </div>
 
-                    {codeSearchResults.length === 0 ? (
-                      <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                        No code search results yet.
-                      </p>
-                    ) : (
-                      codeSearchResults.map((result) => (
+                  {codeSearchResults.length === 0 ? (
+                    <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                      No code search results yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {codeSearchResults.map((result) => (
                         <article
                           key={result.id}
-                          className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+                          className="rounded-lg border border-gray-200 bg-gray-50 p-4"
                         >
                           <div className="mb-2">
                             <p className="break-all text-sm font-medium text-gray-900">
@@ -290,13 +395,73 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                             {result.relevanceReason}
                           </p>
 
-                          <pre className="max-h-64 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
+                          <pre className="max-h-72 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
                             <code>{result.snippet}</code>
                           </pre>
                         </article>
-                      ))
-                    )}
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!loading && selectedIncident && activeTab === "patches" && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Patch Suggestions
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        AI-generated fix suggestions for this incident.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleGeneratePatchSuggestion}
+                      disabled={isPatchLoading}
+                      className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPatchLoading
+                        ? "Generating Patch..."
+                        : "Generate Patch Suggestion"}
+                    </button>
                   </div>
+
+                  {patchError && (
+                    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {patchError}
+                    </p>
+                  )}
+
+                  {patchSuggestions.length === 0 && !isPatchLoading ? (
+                    <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                      No patch suggestions yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {patchSuggestions.map((patch) => (
+                        <article
+                          key={patch.id}
+                          className="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                        >
+                          <p className="text-sm font-medium text-gray-900">
+                            {patch.patchSummary}
+                          </p>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            Risk: {patch.riskLevel} · Human review:{" "}
+                            {patch.requiresHumanReview
+                              ? "Required"
+                              : "Not required"}
+                          </p>
+
+                          <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
+                            <code>{patch.suggestedDiff}</code>
+                          </pre>
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -304,6 +469,29 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
         </div>
       )}
     </>
+  );
+}
+
+function TabButton({
+  label,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+        isActive
+          ? "bg-white text-gray-900 shadow-sm"
+          : "text-gray-500 hover:text-gray-900"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
