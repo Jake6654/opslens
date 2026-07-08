@@ -13,11 +13,13 @@ import java.util.Optional;
 public class LogService {
 
     private final LogRepository logRepository;
+    private final IncidentService incidentService;
 
     // LogService needs LogRepository, and Spring injects it automatically
     // Since LogService is marked with @Service
-    public LogService(LogRepository logRepository) {
+    public LogService(LogRepository logRepository, IncidentService incidentService) {
         this.logRepository = logRepository;
+        this.incidentService = incidentService;
     }
 
     // filtering many logs
@@ -75,7 +77,23 @@ public class LogService {
 
 
     public LogItem saveLog(LogItem logItem){
-        return logRepository.save(logItem);
+
+        LogItem savedLog = logRepository.save(logItem);
+
+        // if log level is error, create incident automatically
+        if ("ERROR".equalsIgnoreCase(savedLog.getLevel())) {
+            try {
+                incidentService.createIncidentFromLog(savedLog.getId());
+            } catch (Exception error) {
+                System.err.println(
+                        "Failed to auto-create incident for log "
+                                + savedLog.getId()
+                                + ": "
+                                + error.getMessage()
+                );
+            }
+        }
+        return savedLog;
     }
 
     // fetching exactly one log

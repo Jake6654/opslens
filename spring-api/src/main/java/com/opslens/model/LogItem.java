@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 
 @Entity
 public class LogItem {
@@ -18,6 +19,7 @@ public class LogItem {
     private String timestamp;
     private String level;
     private String service;
+    @Column(columnDefinition = "TEXT")
     private String message;
 
     private String project;

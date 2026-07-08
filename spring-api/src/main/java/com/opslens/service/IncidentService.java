@@ -34,6 +34,13 @@ public class IncidentService {
         LogItem log = logRepository.findById(logId)
                 .orElseThrow(() -> new IllegalArgumentException("Log not found: " + logId));
 
+        Optional<Incident> existingIncident = incidentRepository.findBySourceLogId(logId);
+
+        // the incident exists return it, otherwise make a new incident from that log
+        if(existingIncident.isPresent()) {
+            return existingIncident.get();
+        }
+
         Incident incident = new Incident(
                 log.getId(),
                 log.getProject(),
