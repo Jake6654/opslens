@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 
-from app.models import (AnalyzeLogRequest, AnalyzeLogResponse, CodeSearchRequest, CodeSearchResponse, PatchSuggestionResponse, PatchSuggestionRequest)
+from app.models import (AnalyzeLogRequest, AnalyzeLogResponse, CodeSearchRequest, CodeSearchResponse, PatchSuggestionResponse, PatchSuggestionRequest, RunTestsRequest, RunTestsResponse)
 
 from app.services.analyzer import analyze_log
 from app.services.code_search import search_code
 from app.services.patch_suggester import suggest_patch
+from app.services.test_runner import run_tests
+
 
 app = FastAPI(title="OpsLens AI Orchestrator")
 
@@ -25,3 +27,7 @@ async def search_code_endpoint(request: CodeSearchRequest) -> CodeSearchResponse
 @app.post("/suggest-patch", response_model=PatchSuggestionResponse)
 def suggest_patch_endpoint(request: PatchSuggestionRequest) -> PatchSuggestionResponse:
     return suggest_patch(request)
+
+@app.post("/run-tests", response_model=RunTestsResponse)
+def run_tests_endpoint(request: RunTestsRequest) -> RunTestsResponse:
+    return run_tests(request)
