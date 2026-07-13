@@ -160,5 +160,45 @@ public class AiOrchestratorClient {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Patch suggestion request was interrupted", error);
         }
+
     }
+
+    public RunTestsResponse runTests(RunTestsRequest request) {
+        String jsonBody;
+
+        try {
+            jsonBody = objectMapper.writeValueAsString(request);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("Failed to serialize run tests request", error);
+        }
+
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(orchestratorUrl + "/run-tests"))
+                .version(HttpClient.Version.HTTP_1_1)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        try {
+            HttpResponse<String> response = httpClient.send(
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "AI orchestrator returned " + response.statusCode()
+                );
+            }
+
+            return objectMapper.readValue(response.body(), RunTestsResponse.class);
+        } catch (IOException error) {
+            throw new IllegalStateException("Run tests request failed", error);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Run tests request was interrupted", error);
+        }
+    }
+
+
 }
