@@ -53,6 +53,18 @@ type PatchSuggestion = {
   createdAt: string;
 };
 
+type TestRunResult = {
+  id: number;
+  incidentId: number;
+  patchSuggestionId: number;
+  status: string;
+  passed: boolean;
+  testCommand: string;
+  output: string;
+  durationMs: number | null;
+  createdAt: string | null;
+};
+
 type DetailTab = "report" | "code" | "patches";
 
 export default function IncidentTable({ incidents }: IncidentTableProps) {
@@ -77,6 +89,20 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   const [patchError, setPatchError] = useState("");
   const [activeTab, setActiveTab] = useState<DetailTab>("report");
 
+  // Test run states
+  // save the test run list by patchSuggetionId
+  const [testRunsByPatchId, setTestRunsByPatchId] = useState<
+    Record<number, TestRunResult[]>
+  >({});
+
+  // save where is currently a test running at
+  const [runningTestPatchId, setRunningTestPatchId] = useState<number | null>(
+    null
+  );
+
+  // save error messages
+  const [testRunError, setTestRunError] = useState("");
+
   async function handleIncidentClick(incident: Incident) {
     try {
       setIsOpen(true);
@@ -91,6 +117,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       // reset patch state here
       setPatchSuggestions([]);
       setPatchError("");
+      setTestRunsByPatchId({});
+      setRunningTestPatchId(null);
+      setTestRunError("");
 
       const response = await fetch(`/api/incidents/${incident.id}/report`);
 
@@ -168,6 +197,8 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
     const data: PatchSuggestion[] = await response.json();
     setPatchSuggestions(data);
+
+    await Promise.all(data.map((patch) => fetchTestRuns(patch.id)));
   }
 
   async function handleGeneratePatchSuggestion() {
@@ -196,6 +227,47 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     }
   }
 
+  async function fetchTestRuns(patchSuggestionId: number) {
+    const response = await fetch(
+      `/api/patch-suggestions/${patchSuggestionId}/test-runs`
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch test runs");
+    }
+
+    const data: TestRunResult[] = await response.json();
+
+    setTestRunsByPatchId((previous) => ({
+      ...previous,
+      [patchSuggestionId]: data,
+    }));
+  }
+
+  async function handleRunTests(patchSuggestionId: number) {
+    try {
+      setRunningTestPatchId(patchSuggestionId);
+      setTestRunError("");
+
+      const response = await fetch(
+        `/api/patch-suggestions/${patchSuggestionId}/run-tests`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to run tests");
+      }
+
+      await fetchTestRuns(patchSuggestionId);
+    } catch {
+      setTestRunError("Could not run tests.");
+    } finally {
+      setRunningTestPatchId(null);
+    }
+  }
+
   function closePanel() {
     setIsOpen(false);
     setSelectedIncident(null);
@@ -204,6 +276,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     setCodeSearchError("");
     setPatchSuggestions([]);
     setPatchError("");
+    setTestRunsByPatchId({});
+    setRunningTestPatchId(null);
+    setTestRunError("");
     setActiveTab("report");
     setError("");
   }
@@ -319,31 +394,31 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                 selectedIncident &&
                 selectedReport &&
                 activeTab === "report" && (
-                <div className="space-y-4">
-                  <DetailRow
-                    label="Incident"
-                    value={`#${selectedIncident.id}`}
-                  />
-                  <DetailRow label="Status" value={selectedIncident.status} />
-                  <DetailRow
-                    label="Severity"
-                    value={selectedIncident.severity}
-                  />
-                  <DetailRow label="Summary" value={selectedReport.summary} />
-                  <DetailRow
-                    label="Suspected Root Cause"
-                    value={selectedReport.suspectedRootCause}
-                  />
-                  <DetailRow
-                    label="Recommended Action"
-                    value={selectedReport.recommendedAction}
-                  />
-                  <DetailRow
-                    label="Confidence"
-                    value={`${selectedReport.confidence}`}
-                  />
-                </div>
-              )}
+                  <div className="space-y-4">
+                    <DetailRow
+                      label="Incident"
+                      value={`#${selectedIncident.id}`}
+                    />
+                    <DetailRow label="Status" value={selectedIncident.status} />
+                    <DetailRow
+                      label="Severity"
+                      value={selectedIncident.severity}
+                    />
+                    <DetailRow label="Summary" value={selectedReport.summary} />
+                    <DetailRow
+                      label="Suspected Root Cause"
+                      value={selectedReport.suspectedRootCause}
+                    />
+                    <DetailRow
+                      label="Recommended Action"
+                      value={selectedReport.recommendedAction}
+                    />
+                    <DetailRow
+                      label="Confidence"
+                      value={`${selectedReport.confidence}`}
+                    />
+                  </div>
+                )}
 
               {!loading && selectedIncident && activeTab === "code" && (
                 <div className="space-y-4">
@@ -433,33 +508,78 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                     </p>
                   )}
 
+                  {testRunError && (
+                    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {testRunError}
+                    </p>
+                  )}
+
                   {patchSuggestions.length === 0 && !isPatchLoading ? (
                     <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
                       No patch suggestions yet.
                     </p>
                   ) : (
                     <div className="space-y-4">
-                      {patchSuggestions.map((patch) => (
-                        <article
-                          key={patch.id}
-                          className="rounded-lg border border-gray-200 bg-gray-50 p-4"
-                        >
-                          <p className="text-sm font-medium text-gray-900">
-                            {patch.patchSummary}
-                          </p>
+                      {patchSuggestions.map((patch) => {
+                        const testRuns = testRunsByPatchId[patch.id] ?? [];
 
-                          <p className="mt-1 text-xs text-gray-500">
-                            Risk: {patch.riskLevel} · Human review:{" "}
-                            {patch.requiresHumanReview
-                              ? "Required"
-                              : "Not required"}
-                          </p>
+                        return (
+                          <article
+                            key={patch.id}
+                            className="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {patch.patchSummary}
+                                </p>
 
-                          <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
-                            <code>{patch.suggestedDiff}</code>
-                          </pre>
-                        </article>
-                      ))}
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Risk: {patch.riskLevel} · Human review:{" "}
+                                  {patch.requiresHumanReview
+                                    ? "Required"
+                                    : "Not required"}
+                                </p>
+                              </div>
+
+                              <button
+                                onClick={() => handleRunTests(patch.id)}
+                                disabled={runningTestPatchId === patch.id}
+                                className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {runningTestPatchId === patch.id
+                                  ? "Running Tests..."
+                                  : "Run Tests"}
+                              </button>
+                            </div>
+
+                            <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
+                              <code>{patch.suggestedDiff}</code>
+                            </pre>
+
+                            <div className="mt-4 border-t border-gray-200 pt-4">
+                              <h4 className="text-sm font-semibold text-gray-900">
+                                Test Runs
+                              </h4>
+
+                              {testRuns.length === 0 ? (
+                                <p className="mt-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-500">
+                                  No test runs yet.
+                                </p>
+                              ) : (
+                                <div className="mt-3 space-y-3">
+                                  {testRuns.map((testRun) => (
+                                    <TestRunCard
+                                      key={testRun.id}
+                                      testRun={testRun}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -469,6 +589,43 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
         </div>
       )}
     </>
+  );
+}
+
+function TestRunCard({ testRun }: { testRun: TestRunResult }) {
+  const statusClassName =
+    testRun.status === "PASSED"
+      ? "bg-green-100 text-green-700"
+      : testRun.status === "FAILED"
+        ? "bg-red-100 text-red-700"
+        : testRun.status === "ERROR"
+          ? "bg-amber-100 text-amber-700"
+          : "bg-gray-100 text-gray-700";
+
+  return (
+    <div className="rounded-md border border-gray-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span
+          className={`rounded-full px-2 py-1 text-xs font-semibold ${statusClassName}`}
+        >
+          {testRun.status}
+        </span>
+        <span className="text-xs text-gray-500">
+          {testRun.durationMs ?? 0} ms
+        </span>
+      </div>
+
+      <p className="mt-2 text-xs text-gray-500">
+        Passed: {testRun.passed ? "true" : "false"}
+      </p>
+      <p className="mt-1 break-all text-xs text-gray-500">
+        Command: {testRun.testCommand}
+      </p>
+
+      <pre className="mt-3 max-h-64 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
+        <code>{testRun.output}</code>
+      </pre>
+    </div>
   );
 }
 
