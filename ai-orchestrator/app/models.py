@@ -79,3 +79,28 @@ class PatchSuggestionResponse(BaseModel):
     suggested_diff: str
     risk_level: str
     requires_human_review: bool
+
+class RunTestsRequest(BaseModel):
+    incident_id: int
+    patch_suggestion_id: int
+    repository: str | None = None
+    test_command: str | None = None
+
+# { Example response
+#   "incident_id": 13,
+#   "patch_suggestion_id": 1,
+#   "status": "SKIPPED",
+#   "passed": false,
+#   "test_command": "./gradlew test",
+#   "output": "Test execution has not been enabled yet.",
+#   "duration_ms": 0
+# }
+class RunTestsResponse(BaseModel):
+    incident_id: int
+    patch_suggestion_id: int
+    status: str
+    passed: bool
+    test_command: str
+    output: str
+    duration_ms: int
+
