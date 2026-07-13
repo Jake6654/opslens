@@ -8,6 +8,9 @@ class Settings:
     github_default_branch: str = os.getenv("GITHUB_DEFAULT_BRANCH", "main")
     code_search_mode: str = os.getenv("CODE_SEARCH_MODE", "github")
     local_repository_path: str = os.getenv("LOCAL_REPOSITORY_PATH", "")
+    test_working_directory: str = os.getenv("TEST_WORKING_DIRECTORY",
+    "/workspace/sketch-my-day/backend")
+    test_timeout_seconds: int = int(os.getenv("TEST_TIMEOUT_SECONDS", "120"))
 
 
 settings = Settings()
