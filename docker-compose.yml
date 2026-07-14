@@ -68,6 +68,7 @@ services:
       CODE_SEARCH_MODE: ${CODE_SEARCH_MODE:-github}
       LOCAL_REPOSITORY_PATH: ${LOCAL_REPOSITORY_PATH:-/workspace/sketch-my-day}
       TEST_WORKING_DIRECTORY: ${TEST_WORKING_DIRECTORY:-/workspace/sketch-my-day/backend}
+      TEST_TIMEOUT_SECONDS: ${TEST_TIMEOUT_SECONDS:-120}
     volumes:
       - ../sketch-my-day:/workspace/sketch-my-day
     healthcheck:

@@ -83,7 +83,7 @@ def default_test_command(repository: str|None) -> str:
   if repository == "local-workspace":
     return "./gradlew test"
   
-  return "test commnad not configured"
+  return "test command not configured"
 
 
 def build_output(stdout: str, stderr: str) -> str:
