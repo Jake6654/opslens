@@ -65,6 +65,19 @@ type TestRunResult = {
   createdAt: string | null;
 };
 
+type TestFailureAnalysis = {
+  id: number;
+  incidentId: number;
+  patchSuggestionId: number;
+  testRunId: number;
+  failureSummary: string;
+  likelyCause: string;
+  recommendedAction: string;
+  confidence: number;
+  rawResponse: string;
+  createdAt: string;
+};
+
 type DetailTab = "report" | "code" | "patches";
 
 export default function IncidentTable({ incidents }: IncidentTableProps) {
@@ -103,6 +116,10 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   // save error messages
   const [testRunError, setTestRunError] = useState("");
 
+  const [testFailureAnalysesByRunId, setTestFailureAnalysesByRunId] = useState<
+    Record<number, TestFailureAnalysis | null>
+  >({});
+
   async function handleIncidentClick(incident: Incident) {
     try {
       setIsOpen(true);
@@ -120,6 +137,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       setTestRunsByPatchId({});
       setRunningTestPatchId(null);
       setTestRunError("");
+      setTestFailureAnalysesByRunId({});
 
       const response = await fetch(`/api/incidents/${incident.id}/report`);
 
@@ -242,6 +260,31 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       ...previous,
       [patchSuggestionId]: data,
     }));
+
+    await Promise.all(data.map((testRun) => fetchTestFailureAnalysis(testRun.id)));
+  }
+
+  async function fetchTestFailureAnalysis(testRunId: number) {
+    const response = await fetch(`/api/test-runs/${testRunId}/analysis`);
+
+    if (response.status === 404) {
+      setTestFailureAnalysesByRunId((previous) => ({
+        ...previous,
+        [testRunId]: null,
+      }));
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch test failure analysis");
+    }
+
+    const data: TestFailureAnalysis = await response.json();
+
+    setTestFailureAnalysesByRunId((previous) => ({
+      ...previous,
+      [testRunId]: data,
+    }));
   }
 
   async function handleRunTests(patchSuggestionId: number) {
@@ -279,6 +322,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     setTestRunsByPatchId({});
     setRunningTestPatchId(null);
     setTestRunError("");
+    setTestFailureAnalysesByRunId({});
     setActiveTab("report");
     setError("");
   }
@@ -572,6 +616,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                                     <TestRunCard
                                       key={testRun.id}
                                       testRun={testRun}
+                                      analysis={
+                                        testFailureAnalysesByRunId[testRun.id]
+                                      }
                                     />
                                   ))}
                                 </div>
@@ -592,7 +639,13 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   );
 }
 
-function TestRunCard({ testRun }: { testRun: TestRunResult }) {
+function TestRunCard({
+  testRun,
+  analysis,
+}: {
+  testRun: TestRunResult;
+  analysis?: TestFailureAnalysis | null;
+}) {
   const statusClassName =
     testRun.status === "PASSED"
       ? "bg-green-100 text-green-700"
@@ -625,6 +678,42 @@ function TestRunCard({ testRun }: { testRun: TestRunResult }) {
       <pre className="mt-3 max-h-64 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
         <code>{testRun.output}</code>
       </pre>
+
+      {analysis && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+              AI Failure Analysis
+            </h5>
+            <span className="text-xs text-amber-700">
+              Confidence {analysis.confidence}
+            </span>
+          </div>
+
+          <div className="mt-3 space-y-3 text-sm text-amber-950">
+            <AnalysisRow
+              label="Failure Summary"
+              value={analysis.failureSummary}
+            />
+            <AnalysisRow label="Likely Cause" value={analysis.likelyCause} />
+            <AnalysisRow
+              label="Recommended Action"
+              value={analysis.recommendedAction}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalysisRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+        {label}
+      </p>
+      <p className="mt-1 leading-6">{value}</p>
     </div>
   );
 }
