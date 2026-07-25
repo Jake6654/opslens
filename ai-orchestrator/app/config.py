@@ -11,6 +11,8 @@ class Settings:
     test_working_directory: str = os.getenv("TEST_WORKING_DIRECTORY",
     "/workspace/sketch-my-day/backend")
     test_timeout_seconds: int = int(os.getenv("TEST_TIMEOUT_SECONDS", "120"))
+    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
 settings = Settings()

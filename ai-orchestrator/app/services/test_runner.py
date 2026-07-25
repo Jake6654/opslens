@@ -83,7 +83,7 @@ def default_test_command(repository: str|None) -> str:
   if repository == "local-workspace":
     return "./gradlew test"
   
-  return "test command not configured"
+  return "test commnad not configured"
 
 
 def build_output(stdout: str, stderr: str) -> str:
@@ -96,6 +96,6 @@ def truncate_output(output: str) -> str:
 
     return output[:MAX_OUTPUT_CHARS] + "\n\n... output truncated ..."
 
-
+# Calculate elapsed time, which means the total amount of time that passes from start to end
 def elapsed_ms(start_time: float) -> int:
     return int((perf_counter() - start_time) * 1000)

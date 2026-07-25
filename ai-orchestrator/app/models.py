@@ -104,3 +104,21 @@ class RunTestsResponse(BaseModel):
     output: str
     duration_ms: int
 
+class AnalyzeTestFailureRequest(BaseModel):
+    incident_id: int
+    patch_suggestion_id: int
+    test_run_id: int
+    test_command: str
+    status: str
+    output: str
+
+
+class AnalyzeTestFailureResponse(BaseModel):
+    incident_id: int
+    patch_suggestion_id: int
+    test_run_id: int
+    failure_summary: str
+    likely_cause: str
+    recommended_action: str
+    confidence: float
+    raw_response: str
