@@ -200,5 +200,42 @@ public class AiOrchestratorClient {
         }
     }
 
+    public AnalyzeTestFailureResponse analyzeTestFailure(
+            AnalyzeTestFailureRequest request
+    ) {
+        try {
+            String jsonBody = objectMapper.writeValueAsString(request);
+
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(orchestratorUrl + "/analyze-test-failure"))
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "AI orchestrator returned " + response.statusCode()
+                );
+            }
+
+            return objectMapper.readValue(
+                    response.body(),
+                    AnalyzeTestFailureResponse.class
+            );
+
+        } catch (IOException error) {
+            throw new IllegalStateException("Test failure analysis request failed", error);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Test failure analysis request was interrupted", error);
+        }
+    }
+
 
 }

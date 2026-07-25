@@ -1,7 +1,10 @@
 package com.opslens.controller;
 
+import com.opslens.model.TestFailureAnalysis;
 import com.opslens.model.TestRunResult;
+import com.opslens.service.TestFailureAnalysisService;
 import com.opslens.service.TestRunnerService;
+import org.aspectj.weaver.ast.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,7 +18,7 @@ public class TestRunnerController {
 
     private final TestRunnerService testRunnerService;
 
-    public TestRunnerController(TestRunnerService testRunnerService) {
+    public TestRunnerController(TestRunnerService testRunnerService, TestFailureAnalysisService testFailureAnalysisService) {
         this.testRunnerService = testRunnerService;
     }
 
@@ -32,4 +35,6 @@ public class TestRunnerController {
     public List<TestRunResult> getTestRuns(@PathVariable Long id) {
         return testRunnerService.getTestRunsForPatchSuggestion(id);
     }
+
+
 }
