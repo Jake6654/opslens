@@ -85,6 +85,7 @@ class RunTestsRequest(BaseModel):
     patch_suggestion_id: int
     repository: str | None = None
     test_command: str | None = None
+    suggested_diff: str | None = None
 
 # { Example response
 #   "incident_id": 13,

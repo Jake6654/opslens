@@ -15,11 +15,19 @@ public class RunTestsRequest {
     @JsonProperty("test_command")
     private String testCommand;
 
-    public RunTestsRequest(Long incidentId, Long patchSuggestionId, String repository, String testCommand) {
+    @JsonProperty("suggested_diff")
+    private String suggestedDiff;
+
+    public RunTestsRequest(Long incidentId, Long patchSuggestionId, String repository, String testCommand, String suggestedDiff) {
         this.incidentId = incidentId;
         this.patchSuggestionId = patchSuggestionId;
         this.repository = repository;
         this.testCommand = testCommand;
+        this.suggestedDiff = suggestedDiff;
+    }
+
+    public String getSuggestedDiff() {
+        return suggestedDiff;
     }
 
     public Long getIncidentId() {

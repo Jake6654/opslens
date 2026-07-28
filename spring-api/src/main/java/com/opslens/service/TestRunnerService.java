@@ -38,7 +38,8 @@ public class TestRunnerService {
                 patchSuggestion.getIncidentId(),
                 patchSuggestion.getId(),
                 "local-workspace",
-                "./gradlew test"
+                "./gradlew test",
+                patchSuggestion.getSuggestedDiff()
         );
 
         RunTestsResponse response = aiOrchestratorClient.runTests(request);
@@ -70,6 +71,8 @@ public class TestRunnerService {
 
     private boolean isFailedOrErrored(TestRunResult result) {
         return "FAILED".equalsIgnoreCase(result.getStatus())
-                || "ERROR".equalsIgnoreCase(result.getStatus());
+                || "ERROR".equalsIgnoreCase(result.getStatus())
+                || "PATCH_APPLY_FAILED".equalsIgnoreCase(result.getStatus());
+                
     }
 }

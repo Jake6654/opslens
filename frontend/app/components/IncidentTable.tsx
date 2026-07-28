@@ -261,7 +261,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       [patchSuggestionId]: data,
     }));
 
-    await Promise.all(data.map((testRun) => fetchTestFailureAnalysis(testRun.id)));
+    await Promise.all(
+      data.map((testRun) => fetchTestFailureAnalysis(testRun.id))
+    );
   }
 
   async function fetchTestFailureAnalysis(testRunId: number) {
@@ -650,10 +652,12 @@ function TestRunCard({
     testRun.status === "PASSED"
       ? "bg-green-100 text-green-700"
       : testRun.status === "FAILED"
-        ? "bg-red-100 text-red-700"
-        : testRun.status === "ERROR"
-          ? "bg-amber-100 text-amber-700"
-          : "bg-gray-100 text-gray-700";
+      ? "bg-red-100 text-red-700"
+      : testRun.status === "ERROR"
+      ? "bg-amber-100 text-amber-700"
+      : testRun.status === "PATCH_APPLY_FAILED"
+      ? "bg-purple-100 text-purple-700"
+      : "bg-gray-100 text-gray-700";
 
   return (
     <div className="rounded-md border border-gray-200 bg-white p-3">
