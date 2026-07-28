@@ -51,6 +51,8 @@ type PatchSuggestion = {
   riskLevel: string;
   requiresHumanReview: boolean;
   createdAt: string;
+  patchValid: boolean | null;
+  patchValidationOutput: string | null;
 };
 
 type TestRunResult = {
@@ -76,6 +78,19 @@ type TestFailureAnalysis = {
   confidence: number;
   rawResponse: string;
   createdAt: string;
+};
+
+type PatchVerification = {
+  patchSuggestionId: number;
+  incidentId: number;
+  status: string;
+  readyForPullRequest: boolean;
+  patchValid: boolean | null;
+  testsPassed: boolean | null;
+  latestTestRunId: number | null;
+  latestTestStatus: string | null;
+  requiresHumanReview: boolean;
+  blockers: string[];
 };
 
 type DetailTab = "report" | "code" | "patches";
@@ -120,6 +135,10 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     Record<number, TestFailureAnalysis | null>
   >({});
 
+  const [verificationByPatchId, setVerificationByPatchId] = useState<
+    Record<number, PatchVerification>
+  >({});
+
   async function handleIncidentClick(incident: Incident) {
     try {
       setIsOpen(true);
@@ -138,6 +157,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       setRunningTestPatchId(null);
       setTestRunError("");
       setTestFailureAnalysesByRunId({});
+      setVerificationByPatchId({});
 
       const response = await fetch(`/api/incidents/${incident.id}/report`);
 
@@ -216,7 +236,14 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     const data: PatchSuggestion[] = await response.json();
     setPatchSuggestions(data);
 
-    await Promise.all(data.map((patch) => fetchTestRuns(patch.id)));
+    await Promise.all(
+      data.map((patch) =>
+        Promise.all([
+          fetchTestRuns(patch.id),
+          fetchPatchVerification(patch.id),
+        ])
+      )
+    );
   }
 
   async function handleGeneratePatchSuggestion() {
@@ -261,7 +288,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       [patchSuggestionId]: data,
     }));
 
-    await Promise.all(data.map((testRun) => fetchTestFailureAnalysis(testRun.id)));
+    await Promise.all(
+      data.map((testRun) => fetchTestFailureAnalysis(testRun.id))
+    );
   }
 
   async function fetchTestFailureAnalysis(testRunId: number) {
@@ -287,6 +316,23 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     }));
   }
 
+  async function fetchPatchVerification(patchSuggestionId: number) {
+    const response = await fetch(
+      `/api/patch-suggestions/${patchSuggestionId}/verification`
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to verify patch readiness");
+    }
+
+    const data: PatchVerification = await response.json();
+
+    setVerificationByPatchId((previous) => ({
+      ...previous,
+      [patchSuggestionId]: data,
+    }));
+  }
+
   async function handleRunTests(patchSuggestionId: number) {
     try {
       setRunningTestPatchId(patchSuggestionId);
@@ -303,7 +349,10 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
         throw new Error("Failed to run tests");
       }
 
-      await fetchTestRuns(patchSuggestionId);
+      await Promise.all([
+        fetchTestRuns(patchSuggestionId),
+        fetchPatchVerification(patchSuggestionId),
+      ]);
     } catch {
       setTestRunError("Could not run tests.");
     } finally {
@@ -323,6 +372,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     setRunningTestPatchId(null);
     setTestRunError("");
     setTestFailureAnalysesByRunId({});
+    setVerificationByPatchId({});
     setActiveTab("report");
     setError("");
   }
@@ -566,6 +616,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                     <div className="space-y-4">
                       {patchSuggestions.map((patch) => {
                         const testRuns = testRunsByPatchId[patch.id] ?? [];
+                        const verification = verificationByPatchId[patch.id];
 
                         return (
                           <article
@@ -584,6 +635,13 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                                     ? "Required"
                                     : "Not required"}
                                 </p>
+
+                                <PatchValidationStatus patch={patch} />
+                                {verification && (
+                                  <PatchReadinessStatus
+                                    verification={verification}
+                                  />
+                                )}
                               </div>
 
                               <button
@@ -597,8 +655,20 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                               </button>
                             </div>
 
+                            {patch.patchValid === false &&
+                              patch.patchValidationOutput && (
+                                <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                                    Patch Validation Output
+                                  </p>
+                                  <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-red-950 p-3 text-xs text-red-50">
+                                    <code>{patch.patchValidationOutput}</code>
+                                  </pre>
+                                </div>
+                              )}
+
                             <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
-                              <code>{patch.suggestedDiff}</code>
+                              <code>{patch.suggestedDiff || "No diff returned."}</code>
                             </pre>
 
                             <div className="mt-4 border-t border-gray-200 pt-4">
@@ -639,6 +709,61 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   );
 }
 
+
+function PatchValidationStatus({ patch }: { patch: PatchSuggestion }) {
+  const validationClassName =
+    patch.patchValid === true
+      ? "border-green-200 bg-green-50 text-green-700"
+      : patch.patchValid === false
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-gray-200 bg-white text-gray-500";
+
+  const validationLabel =
+    patch.patchValid === true
+      ? "Patch validation: Valid"
+      : patch.patchValid === false
+      ? "Patch validation: Invalid"
+      : "Patch validation: Not checked";
+
+  return (
+    <p
+      className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${validationClassName}`}
+    >
+      {validationLabel}
+    </p>
+  );
+}
+
+function PatchReadinessStatus({
+  verification,
+}: {
+  verification: PatchVerification;
+}) {
+  const ready = verification.readyForPullRequest;
+
+  return (
+    <div
+      className={`mt-3 rounded-md border p-3 ${
+        ready
+          ? "border-green-200 bg-green-50 text-green-800"
+          : "border-amber-200 bg-amber-50 text-amber-900"
+      }`}
+    >
+      <p className="text-xs font-semibold uppercase">
+        {ready ? "Ready for Pull Request" : `PR blocked: ${verification.status}`}
+      </p>
+
+      {!ready && verification.blockers.length > 0 && (
+        <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
+          {verification.blockers.map((blocker) => (
+            <li key={blocker}>{blocker}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function TestRunCard({
   testRun,
   analysis,
@@ -650,10 +775,12 @@ function TestRunCard({
     testRun.status === "PASSED"
       ? "bg-green-100 text-green-700"
       : testRun.status === "FAILED"
-        ? "bg-red-100 text-red-700"
-        : testRun.status === "ERROR"
-          ? "bg-amber-100 text-amber-700"
-          : "bg-gray-100 text-gray-700";
+      ? "bg-red-100 text-red-700"
+      : testRun.status === "ERROR"
+      ? "bg-amber-100 text-amber-700"
+      : testRun.status === "PATCH_APPLY_FAILED"
+      ? "bg-purple-100 text-purple-700"
+      : "bg-gray-100 text-gray-700";
 
   return (
     <div className="rounded-md border border-gray-200 bg-white p-3">

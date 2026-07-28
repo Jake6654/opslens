@@ -1,9 +1,10 @@
-from app.models import CodeSearchItem, CodeSearchRequest, CodeSearchResponse
-
 from app.config import settings
+from app.models import CodeSearchItem, CodeSearchRequest, CodeSearchResponse
 from app.services.github_client import GitHubClient
-from app.services.source_filter import is_supported_source_file
 from app.services.local_code_search_client import LocalCodeSearchClient
+from app.services.source_filter import is_supported_source_file
+
+MAX_RESULTS = 5
 
 
 def placeholder_result(request: CodeSearchRequest) -> CodeSearchResponse:
@@ -22,13 +23,14 @@ def placeholder_result(request: CodeSearchRequest) -> CodeSearchResponse:
                     "}"
                 ),
                 relevance_reason=(
-                    "No GitHub code search result was found. "
+                    "No code search result was found. "
                     "This placeholder keeps the code search workflow testable."
                 ),
                 score=0.1,
             )
         ]
     )
+
 
 async def search_code(request: CodeSearchRequest) -> CodeSearchResponse:
     if settings.code_search_mode == "local":
@@ -40,90 +42,78 @@ async def search_github_code(request: CodeSearchRequest) -> CodeSearchResponse:
     github = GitHubClient()
     queries = build_queries(request)
 
-    results: list[CodeSearchItem] = []
-    # If Github returns the same file for multiple queries, we do not wnat duplicate results
-    seen_paths: set[str] = set()
+    results_by_path: dict[str, CodeSearchItem] = {}
 
     for query in queries:
-        github_items = await github.search_code(query, limit=3)
+        github_items = await github.search_code(query, limit=5)
 
         for item in github_items:
             path = item.get("path")
-            
-            # if the file path is missing or already used, skip 
-            if not path or path in seen_paths:
+            if not path or not is_supported_source_file(path):
                 continue
 
-            if not is_supported_source_file(path):
-                continue
-
-            seen_paths.add(path)
-
-            # Fetches the real source code from GitHub
             content = await github.fetch_file(path)
-            # Extracts a smaller relevant section from the file
             snippet = make_snippet(content, query)
+            score = score_search_result(path, content, query)
 
-            results.append(
-                CodeSearchItem(
-                    repository=f"{github.owner}/{github.repo}",
-                    file_path=path,
-                    symbol_name=request.service,
-                    snippet=snippet,
-                    relevance_reason=f"Matched GitHub search query: {query}",
-                    score=0.7,
-                )
+            existing = results_by_path.get(path)
+            if existing and existing.score >= score:
+                continue
+
+            results_by_path[path] = CodeSearchItem(
+                repository=f"{github.owner}/{github.repo}",
+                file_path=path,
+                symbol_name=request.service,
+                snippet=snippet,
+                relevance_reason=f"Matched GitHub search query: {query}",
+                score=score,
             )
 
-            # Stops after collecting enough results
-            if len(results) >= 5:
-                break
-
-        if len(results) >= 5:
-            break
+    results = sorted(
+        results_by_path.values(),
+        key=lambda item: item.score,
+        reverse=True,
+    )[:MAX_RESULTS]
 
     if not results:
         return placeholder_result(request)
 
     return CodeSearchResponse(results=results)
+
 
 # local development
 def search_local_code(request: CodeSearchRequest) -> CodeSearchResponse:
     client = LocalCodeSearchClient(settings.local_repository_path)
     queries = build_queries(request)
 
-    results: list[CodeSearchItem] = []
-    seen_paths: set[str] = set()
+    results_by_path: dict[str, CodeSearchItem] = {}
 
     for query in queries:
-        local_items = client.search_code(query, limit=5)
+        local_items = client.search_code(query, limit=10)
 
         for item in local_items:
             path = item["path"]
+            snippet = make_snippet(item["content"], query)
+            score = item.get("score") or score_search_result(path, item["content"], query)
 
-            if path in seen_paths:
+            existing = results_by_path.get(path)
+            if existing and existing.score >= score:
                 continue
 
-            seen_paths.add(path)
-
-            snippet = make_snippet(item["content"], query)
-
-            results.append(
-                CodeSearchItem(
-                    repository="local-workspace",
-                    file_path=path,
-                    symbol_name=request.service,
-                    snippet=snippet,
-                    relevance_reason=f"Matched local search query: {query}",
-                    score=0.75,
-                )
+            results_by_path[path] = CodeSearchItem(
+                repository="local-workspace",
+                file_path=path,
+                symbol_name=request.service,
+                snippet=snippet,
+                relevance_reason=f"Matched local search query: {query}",
+                score=score,
             )
 
-            if len(results) >= 5:
-                break
-
-        if len(results) >= 5:
-            break
+    results = sorted(
+        results_by_path.values(),
+        key=lambda item: item.score,
+        reverse=True,
+    )[:MAX_RESULTS]
 
     if not results:
         return placeholder_result(request)
@@ -131,13 +121,18 @@ def search_local_code(request: CodeSearchRequest) -> CodeSearchResponse:
     return CodeSearchResponse(results=results)
 
 
-# This fuction decides what keywords tosearch in GitHub 
+# This function decides what keywords to search in GitHub/local source.
 def build_queries(request: CodeSearchRequest) -> list[str]:
-    # It uses data from the incident
-    # service = DiaryService
-    # message = NullPointerException while saving diary entry
-    # analysis_summary = Diary save failed with null pointer
-    # suspected_root_cause = A required field may be null
+    combined_text = " ".join(
+        value or ""
+        for value in [
+            request.service,
+            request.message,
+            request.analysis_summary,
+            request.suspected_root_cause,
+        ]
+    ).lower()
+
     candidates = [
         request.service,
         request.message,
@@ -145,21 +140,83 @@ def build_queries(request: CodeSearchRequest) -> list[str]:
         request.suspected_root_cause,
     ]
 
+    if "diary" in combined_text:
+        candidates.extend(["SaveDiaryRequest", "DiaryController", "DiaryService"])
+
+    if "userid" in combined_text or "user id" in combined_text:
+        candidates.extend(["userId", "SaveDiaryRequest", "@NotBlank", "@Valid"])
+
+    if "validation" in combined_text or "bad request" in combined_text:
+        candidates.extend(["SaveDiaryRequest", "@Valid", "MethodArgumentNotValidException"])
+
+    if "null" in combined_text:
+        candidates.extend(["@NotNull", "@NotBlank", "Objects.isNull"])
+
+    return dedupe_queries(candidates)[:10]
+
+
+def dedupe_queries(candidates: list[str | None]) -> list[str]:
     queries = []
+    seen = set()
 
     for candidate in candidates:
-        if candidate:
-            queries.append(candidate)
+        if not candidate:
+            continue
 
-    # returns only the first 3 queries to avoid calling GitHib too many times
-    # Usually the most useful search terms are top 3
-    return queries[:3]
+        query = candidate.strip()
+        if not query:
+            continue
 
-# This function custs a large source file into a smaller readable snippet
-# fils can be hundreds of lines long, so OpsLens should not store or show the entire file
-def make_snippet(content: str, query: str, max_lines: int = 20) -> str:
-    # Splits the file into individual lines
+        key = query.lower()
+        if key in seen:
+            continue
+
+        seen.add(key)
+        queries.append(query)
+
+    return queries
+
+
+def score_search_result(path: str, content: str, query: str) -> float:
+    path_lower = path.lower()
+    content_lower = content.lower()
+    query_lower = query.lower()
+
+    score = 0.5
+
+    if query_lower in path_lower:
+        score += 0.25
+
+    if query_lower in content_lower:
+        score += 0.1
+
+    if "dto" in path_lower or "request" in path_lower:
+        score += 0.18
+
+    if "controller" in path_lower:
+        score += 0.16
+
+    if "service" in path_lower:
+        score += 0.14
+
+    if "diary" in path_lower:
+        score += 0.12
+
+    if "@valid" in content_lower or "@notblank" in content_lower or "@notnull" in content_lower:
+        score += 0.16
+
+    if "globalexceptionhandler" in path_lower:
+        score -= 0.12
+
+    return round(max(score, 0.1), 2)
+
+
+# This function cuts a large source file into a smaller readable snippet.
+def make_snippet(content: str, query: str, max_lines: int = 35) -> str:
     lines = content.splitlines()
+
+    if len(lines) <= 120:
+        return content
 
     query_lower = query.lower()
 
@@ -168,9 +225,8 @@ def make_snippet(content: str, query: str, max_lines: int = 20) -> str:
         if query_lower in line.lower():
             match_index = index
             break
-    # decide to cut from where to where 
-    start = max(match_index - 5, 0)
-    # 파일 끝을 넘어가지 않도록 막는다
+
+    start = max(match_index - 8, 0)
     end = min(match_index + max_lines, len(lines))
 
     return "\n".join(lines[start:end])

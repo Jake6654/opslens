@@ -17,18 +17,23 @@ public class PatchSuggestion {
 
     private Long incidentId;
 
-    @Column(length = 8000)
+    @Column(columnDefinition = "TEXT")
     private String rootCause;
 
     @Column(length = 4000)
     private String patchSummary;
 
-    @Column(length = 12000)
+    @Column(columnDefinition = "TEXT")
     private String suggestedDiff;
 
     private String riskLevel;
 
     private Boolean requiresHumanReview;
+
+    private Boolean patchValid;
+
+    @Column(columnDefinition = "TEXT")
+    private String patchValidationOutput;
 
     private LocalDateTime createdAt;
 
@@ -41,7 +46,9 @@ public class PatchSuggestion {
             String patchSummary,
             String suggestedDiff,
             String riskLevel,
-            Boolean requiresHumanReview
+            Boolean requiresHumanReview,
+            Boolean patchValid,
+            String patchValidationOutput
     ) {
         this.incidentId = incidentId;
         this.rootCause = rootCause;
@@ -49,6 +56,8 @@ public class PatchSuggestion {
         this.suggestedDiff = suggestedDiff;
         this.riskLevel = riskLevel;
         this.requiresHumanReview = requiresHumanReview;
+        this.patchValid = patchValid;
+        this.patchValidationOutput = patchValidationOutput;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -83,5 +92,12 @@ public class PatchSuggestion {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
-}
 
+    public Boolean getPatchValid() {
+        return patchValid;
+    }
+
+    public String getPatchValidationOutput() {
+        return patchValidationOutput;
+    }
+}

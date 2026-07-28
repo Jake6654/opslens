@@ -30,15 +30,34 @@ public class TestRunnerService {
     }
 
     public TestRunResult runTestsForPatchSuggestion(Long patchSuggestionId) {
+
         PatchSuggestion patchSuggestion = patchSuggestionRepository.findById(patchSuggestionId)
                 .orElseThrow(() -> new IllegalArgumentException("Patch suggestion not found: " + patchSuggestionId));
+
+        if (Boolean.FALSE.equals(patchSuggestion.getPatchValid())) {
+            TestRunResult result = new TestRunResult(
+                    patchSuggestion.getIncidentId(),
+                    patchSuggestion.getId(),
+                    "PATCH_APPLY_FAILED",
+                    false,
+                    "./gradlew test",
+                    "Patch validation already failed before test execution:\n"
+                            + patchSuggestion.getPatchValidationOutput(),
+                    0
+            );
+
+            TestRunResult savedResult = testRunResultRepository.save(result);
+            testFailureAnalysisService.analyzeAndSave(savedResult);
+            return savedResult;
+        }
 
 
         RunTestsRequest request = new RunTestsRequest(
                 patchSuggestion.getIncidentId(),
                 patchSuggestion.getId(),
                 "local-workspace",
-                "./gradlew test"
+                "./gradlew test",
+                patchSuggestion.getSuggestedDiff()
         );
 
         RunTestsResponse response = aiOrchestratorClient.runTests(request);
@@ -70,6 +89,8 @@ public class TestRunnerService {
 
     private boolean isFailedOrErrored(TestRunResult result) {
         return "FAILED".equalsIgnoreCase(result.getStatus())
-                || "ERROR".equalsIgnoreCase(result.getStatus());
+                || "ERROR".equalsIgnoreCase(result.getStatus())
+                || "PATCH_APPLY_FAILED".equalsIgnoreCase(result.getStatus());
+
     }
 }

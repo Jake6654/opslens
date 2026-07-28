@@ -33,7 +33,21 @@ public class PatchSuggestionResponse {
     @JsonProperty("requires_human_review")
     private Boolean requiresHumanReview;
 
+    @JsonProperty("patch_valid")
+    private Boolean patchValid;
+
+    @JsonProperty("patch_validation_output")
+    private String patchValidationOutput;
+
     public PatchSuggestionResponse() {
+    }
+
+    public Boolean getPatchValid() {
+        return patchValid;
+    }
+
+    public String getPatchValidationOutput() {
+        return patchValidationOutput;
     }
 
     @JsonProperty("incident_id")

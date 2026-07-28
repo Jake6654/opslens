@@ -30,7 +30,7 @@ public class PatchCodeResult {
 
     }
 
-    public PatchCodeResult(String repository, String filePath, String relevanceReason, String snippet, Double score) {
+    public PatchCodeResult(String repository, String filePath, String snippet, String relevanceReason, Double score) {
         this.repository = repository;
         this.filePath = filePath;
         this.snippet = snippet;

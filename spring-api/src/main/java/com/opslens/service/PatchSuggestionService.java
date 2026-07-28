@@ -14,6 +14,7 @@ import com.opslens.repository.IncidentRepository;
 import com.opslens.repository.PatchSuggestionRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -47,7 +48,14 @@ public class PatchSuggestionService {
                 .orElseThrow(() -> new IllegalStateException("Incident report not found: " + incidentId));
 
         List<CodeSearchResult> codeResults =
-                codeSearchResultRepository.findByIncidentId(incidentId);
+                codeSearchResultRepository.findByIncidentIdOrderByScoreDescCreatedAtDesc(incidentId)
+                        .stream()
+                        .sorted(Comparator.comparing(
+                                CodeSearchResult::getScore,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        ))
+                        .limit(5)
+                        .toList();
 
         if (codeResults.isEmpty()) {
             throw new IllegalStateException("Run code search before patch suggestion");
@@ -73,7 +81,9 @@ public class PatchSuggestionService {
                 response.getPatchSummary(),
                 response.getSuggestedDiff(),
                 response.getRiskLevel(),
-                response.getRequiresHumanReview()
+                response.getRequiresHumanReview(),
+                response.getPatchValid(),
+                response.getPatchValidationOutput()
         );
 
         return patchSuggestionRepository.save(suggestion);

@@ -3,7 +3,7 @@ FROM python:3.12-slim
 
 RUN apt-get update \
     # need Java to run "./gradlew test" in Python env
-    && apt-get install -y --no-install-recommends openjdk-21-jdk \
+    && apt-get install -y --no-install-recommends openjdk-21-jdk git \
     && rm -rf /var/lib/apt/lists/*
 
 
