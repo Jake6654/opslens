@@ -11,6 +11,7 @@ import com.opslens.repository.CodeSearchResultRepository;
 import com.opslens.repository.IncidentReportRepository;
 import com.opslens.repository.IncidentRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -29,6 +30,7 @@ public class CodeSearchService {
         this.aiOrchestratorClient = aiOrchestratorClient;
     }
 
+    @Transactional
     public List<CodeSearchResult> searchCodeForIncident(Long incidentId) {
         // First, it loads the incident
         // if the incident exists, return it, otherwise throw an error
@@ -57,7 +59,10 @@ public class CodeSearchService {
         CodeSearchResponse response = aiOrchestratorClient.searchCode(request);
 
 
-        // Fifth, it converts the response items into database entities
+        // Fifth, replace old search results so patch generation uses fresh context only
+        codeSearchResultRepository.deleteByIncidentId(incidentId);
+
+        // Sixth, it converts the response items into database entities
         List<CodeSearchResult> results = response.getResults().stream() // process each item in the list
                 .map(item -> toEntity(incidentId, item)) // transform each CoderSearchItem into a CodeSearchResult
                 .toList();
@@ -66,7 +71,7 @@ public class CodeSearchService {
     }
 
     public List<CodeSearchResult> getCodeSearchResults(Long incidentId){
-        return codeSearchResultRepository.findByIncidentId(incidentId);
+        return codeSearchResultRepository.findByIncidentIdOrderByScoreDescCreatedAtDesc(incidentId);
     }
 
 

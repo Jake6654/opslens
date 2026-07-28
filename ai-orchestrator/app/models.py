@@ -79,13 +79,15 @@ class PatchSuggestionResponse(BaseModel):
     suggested_diff: str
     risk_level: str
     requires_human_review: bool
+    patch_valid: bool
+    patch_validation_output: str | None = None
 
 class RunTestsRequest(BaseModel):
     incident_id: int
     patch_suggestion_id: int
     repository: str | None = None
     test_command: str | None = None
-    suggested_diff: str | None = None
+    suggested_diff:str |None = None
 
 # { Example response
 #   "incident_id": 13,

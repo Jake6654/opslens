@@ -7,4 +7,8 @@ import java.util.List;
 
 public interface CodeSearchResultRepository extends JpaRepository<CodeSearchResult, Long> {
     List<CodeSearchResult> findByIncidentId(Long incidentId);
+
+    List<CodeSearchResult> findByIncidentIdOrderByScoreDescCreatedAtDesc(Long incidentId);
+
+    void deleteByIncidentId(Long incidentId);
 }
