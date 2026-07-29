@@ -12,11 +12,37 @@ patch is ready to become a pull request.
 The platform is designed around human review. AI-generated code is never pushed
 directly to a production branch or deployed automatically.
 
+## Current Scope: Single-Project Prototype
+
+OpsLens is currently a single-project prototype integrated with
+[`sketch-my-day`](https://github.com/Jake6654/sketch-my-day). The local Docker
+environment mounts the `sketch-my-day` workspace, and the current repository
+search, patch generation, and test commands are configured around that
+application.
+
+This limited scope is intentional. The immediate goal is to validate one
+complete, real workflow before introducing multi-tenant platform complexity:
+
+```text
+sketch-my-day error
+  -> OpsLens log ingestion
+  -> automatic incident creation
+  -> AI incident analysis
+  -> local or GitHub code search
+  -> patch generation and validation
+  -> isolated test execution
+  -> human-reviewed GitHub pull request
+```
+
+After this vertical slice is reliable, OpsLens will evolve into a multi-project
+SaaS platform where teams can connect their own repositories and application
+services.
+
 ## Current Development Status
 
 OpsLens has completed the incident analysis, code search, patch generation, and
-test-validation workflow. Development is now moving into GitHub pull request
-automation.
+test-validation workflow for `sketch-my-day`. Development is now moving into
+GitHub pull request automation.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
@@ -360,9 +386,31 @@ An `ERROR` log starts the incident workflow automatically.
 Terraform will provision and manage the cloud infrastructure. Kubernetes will
 run and manage the OpsLens application workloads on that infrastructure.
 
+### Post-Phase 6: Multi-Project SaaS
+
+Once the end-to-end workflow and infrastructure are stable, the project will
+be generalized from its `sketch-my-day` integration into a SaaS product:
+
+- Add organization, project, environment, and repository connection models
+- Replace hardcoded repository mappings with per-project configuration
+- Use a GitHub App for repository access and pull request automation
+- Issue separate ingestion API keys for each project and environment
+- Add user authentication, team membership, and role-based authorization
+- Isolate tenant data, repository access, secrets, and test workspaces
+- Move long-running analysis and test execution to asynchronous job queues
+- Support project-specific build systems, test commands, timeouts, and policies
+- Add usage limits, audit history, observability, and operational controls
+
+The prototype-first approach keeps the current system concrete and testable.
+The SaaS phase will generalize proven workflows instead of designing
+multi-tenant abstractions before the core incident repair flow is reliable.
+
 ## Project Positioning
 
-OpsLens is an AI-assisted incident analysis and code-repair platform for backend
-services. Its purpose is not autonomous production deployment; its purpose is
-to shorten investigation time and prepare a validated, tested pull request for
-developer review.
+Today, OpsLens is a single-project agentic DevOps prototype validated against
+`sketch-my-day`. Its long-term direction is a multi-project SaaS platform for
+backend engineering teams.
+
+Its purpose is not autonomous production deployment. OpsLens shortens
+investigation time and prepares a validated, tested pull request for developer
+review, while keeping humans responsible for approval and deployment.
