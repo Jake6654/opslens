@@ -8,7 +8,7 @@ from app.config import settings
 from app.models import RunTestsRequest, RunTestsResponse
 
 ALLOWED_TEST_COMMANDS = {
-    "./gradlew test",
+    "./gradlew test --no-daemon",
     "./mvnw test",
     "npm test",
     "pytest",
@@ -172,7 +172,7 @@ def normalize_diff(suggested_diff: str) -> str:
 
 def default_test_command(repository: str | None) -> str:
     if repository == "local-workspace":
-        return "./gradlew test"
+        return "./gradlew test --no-daemon"
 
     return "test command not configured"
 
