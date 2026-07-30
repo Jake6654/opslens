@@ -40,7 +40,7 @@ public class TestRunnerService {
                     patchSuggestion.getId(),
                     "PATCH_APPLY_FAILED",
                     false,
-                    "./gradlew test",
+                    "./gradlew test --no-daemon",
                     "Patch validation already failed before test execution:\n"
                             + patchSuggestion.getPatchValidationOutput(),
                     0
@@ -56,7 +56,7 @@ public class TestRunnerService {
                 patchSuggestion.getIncidentId(),
                 patchSuggestion.getId(),
                 "local-workspace",
-                "./gradlew test",
+                "./gradlew test --no-daemon",
                 patchSuggestion.getSuggestedDiff()
         );
 

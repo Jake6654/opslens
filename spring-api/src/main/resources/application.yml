@@ -18,3 +18,10 @@ server:
 ai:
   orchestrator:
     url: ${AI_ORCHESTRATOR_URL:http://localhost:8002}
+
+github:
+  owner: ${GITHUB_OWNER:Jake6654}
+  repository: ${GITHUB_REPOSITORY:sketch-my-day}
+  base-branch: ${GITHUB_BASE_BRANCH:main}
+  branch-prefix: ${GITHUB_BRANCH_PREFIX:ai-fix}
+

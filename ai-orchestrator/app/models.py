@@ -94,7 +94,7 @@ class RunTestsRequest(BaseModel):
 #   "patch_suggestion_id": 1,
 #   "status": "SKIPPED",
 #   "passed": false,
-#   "test_command": "./gradlew test",
+#   "test_command": "./gradlew test --no-daemon",
 #   "output": "Test execution has not been enabled yet.",
 #   "duration_ms": 0
 # }
