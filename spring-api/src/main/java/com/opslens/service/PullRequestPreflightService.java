@@ -36,12 +36,14 @@ public class PullRequestPreflightService {
     }
 
     public PullRequestPreflightResponse buildPlan(Long patchSuggestionId) {
+        // Loading the patch
         PatchSuggestion patch = patchSuggestionRepository
                 .findById(patchSuggestionId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Patch suggestion not found: " + patchSuggestionId
                 ));
 
+        // reusing verification method we created at Phase 4
         PatchVerificationResponse verification =
                 patchVerificationService.verify(patchSuggestionId);
 
@@ -51,6 +53,8 @@ public class PullRequestPreflightService {
                         "Incident not found: " + patch.getIncidentId()
                 ));
 
+        // verification.getBlockers() is immutable. The service creates a mutable copy:
+        // we need to add blockers, so make it mutable
         List<String> blockers =
                 new ArrayList<>(verification.getBlockers());
 
@@ -72,6 +76,7 @@ public class PullRequestPreflightService {
 
         String qualifiedRepository =
                 buildQualifiedRepository(owner, repositoryName);
+
 
         String proposedBranch = buildBranchName(
                 branchPrefix,
