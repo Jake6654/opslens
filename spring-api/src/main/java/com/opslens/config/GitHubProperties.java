@@ -3,6 +3,7 @@ package com.opslens.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,10 +16,39 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "github")
 public class GitHubProperties {
 
+    private String apiBaseUrl;
+    private String apiVersion;
+    // Token is readable by GitHubClient, but it is never exposed through a getter on an API response DTO
+    private String token;
     private String owner;
     private String repository;
     private String baseBranch;
     private String branchPrefix;
+
+
+    public String getApiBaseUrl() {
+        return apiBaseUrl;
+    }
+
+    public void setApiBaseUrl(String apiBaseUrl) {
+        this.apiBaseUrl = apiBaseUrl;
+    }
+
+    public String getApiVersion() {
+        return apiVersion;
+    }
+
+    public void setApiVersion(String apiVersion) {
+        this.apiVersion = apiVersion;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
 
     public String getOwner() {
         return owner;

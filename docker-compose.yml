@@ -27,6 +27,11 @@ services:
       DB_PASSWORD: opslens
       API_KEY: ${API_KEY}
       AI_ORCHESTRATOR_URL: http://ai-orchestrator:8000
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_OWNER: ${GITHUB_OWNER:-Jake6654}
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-sketch-my-day}
+      GITHUB_BASE_BRANCH: ${GITHUB_BASE_BRANCH:-main}
+      GITHUB_BRANCH_PREFIX: ${GITHUB_BRANCH_PREFIX:-ai-fix}
     depends_on:
       postgres:
         condition: service_healthy
