@@ -23,16 +23,24 @@ public class PullRequestBranchService {
         this.gitHubClient = gitHubClient;
     }
 
+    /**
+     * Creates the planned pull-request branch only when preflight checks pass.
+     * Repeating the same safe request returns ALREADY_EXISTS instead of
+     * creating or overwriting another branch.
+     */
     public CreatePullRequestBranchResponse createBranch(
             Long patchSuggestionId
     ) {
+        // Re-run preflight immediately before mutating GitHub state.
         PullRequestPreflightResponse plan =
                 preflightService.buildPlan(patchSuggestionId);
 
+        // Unsafe patches or failed tests must never reach the GitHub client.
         if (!plan.isReady()) {
             throw new PullRequestBlockedException(plan.getBlockers());
         }
 
+        // The new branch must begin at the current base branch commit.
         GitHubBranchReference baseReference = gitHubClient
                 .findBranch(plan.getBaseBranch())
                 .orElseThrow(() -> new GitHubApiException(
@@ -44,6 +52,7 @@ public class PullRequestBranchService {
         Optional<GitHubBranchReference> existing =
                 gitHubClient.findBranch(plan.getProposedBranch());
 
+        // Resolve an existing branch without overwriting it.
         if (existing.isPresent()) {
             return resolveExistingBranch(
                     plan,
@@ -53,6 +62,7 @@ public class PullRequestBranchService {
         }
 
         try {
+            // Create the branch at the exact base SHA selected above.
             GitHubBranchReference created = gitHubClient.createBranch(
                     plan.getProposedBranch(),
                     baseReference.sha()
@@ -66,6 +76,7 @@ public class PullRequestBranchService {
                     true
             );
         } catch (GitHubApiException error) {
+            // GitHub commonly returns 422 when another request created the ref.
             if (error.getStatusCode() != 422) {
                 throw error;
             }
@@ -74,11 +85,16 @@ public class PullRequestBranchService {
         }
     }
 
+    /**
+     * Treats an existing branch as idempotent only when it still points to the
+     * expected base SHA; otherwise it reports a conflict and preserves it.
+     */
     private CreatePullRequestBranchResponse resolveExistingBranch(
             PullRequestPreflightResponse plan,
             GitHubBranchReference baseReference,
             GitHubBranchReference existing
     ) {
+        // Never overwrite a branch that may contain someone else's commits.
         if (!baseReference.sha().equals(existing.sha())) {
             throw new PullRequestBranchConflictException(
                     "The proposed branch already exists at a different "
@@ -95,6 +111,10 @@ public class PullRequestBranchService {
         );
     }
 
+    /**
+     * Recovers from a concurrent branch-creation race by reading the branch
+     * again and applying the same SHA safety check.
+     */
     private CreatePullRequestBranchResponse resolveCreateRace(
             PullRequestPreflightResponse plan,
             GitHubBranchReference baseReference,
@@ -103,6 +123,7 @@ public class PullRequestBranchService {
         Optional<GitHubBranchReference> existing =
                 gitHubClient.findBranch(plan.getProposedBranch());
 
+        // If no branch appeared, the original GitHub error was not a safe race.
         if (existing.isEmpty()) {
             throw originalError;
         }
@@ -114,6 +135,9 @@ public class PullRequestBranchService {
         );
     }
 
+    /**
+     * Maps internal plan and GitHub reference data to the public API response.
+     */
     private CreatePullRequestBranchResponse response(
             PullRequestPreflightResponse plan,
             GitHubBranchReference baseReference,

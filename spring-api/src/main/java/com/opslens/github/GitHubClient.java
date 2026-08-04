@@ -39,11 +39,17 @@ public class GitHubClient {
         this.properties = properties;
     }
 
+    /**
+     * Looks up a branch in the configured GitHub repository.
+     * A missing branch is represented by Optional.empty() instead of an error.
+     */
     public Optional<GitHubBranchReference> findBranch(String branch) {
+        // Fail locally before sending a malformed or unauthenticated request.
         validateConfiguration();
         validateBranch(branch);
 
         String ref = "heads/" + branch;
+        // Build a URL like GET /repos/{owner}/{repository}/git/ref/heads/{branch}.
         URI uri = URI.create(repositoryApiUrl()
                 + "/git/ref/"
                 + encodePathValue(ref));
@@ -54,6 +60,7 @@ public class GitHubClient {
 
         HttpResponse<String> response = send(request);
 
+        // A missing branch is an expected lookup result during branch creation.
         if (response.statusCode() == 404) {
             return Optional.empty();
         }
@@ -62,10 +69,14 @@ public class GitHubClient {
         return Optional.of(parseReference(response.body()));
     }
 
+    /**
+     * Creates a new Git branch that points to the supplied base commit SHA.
+     */
     public GitHubBranchReference createBranch(
             String branch,
             String sha
     ) {
+        // Validate all inputs before performing a GitHub mutation.
         validateConfiguration();
         validateBranch(branch);
 
@@ -79,6 +90,7 @@ public class GitHubClient {
         payload.put("ref", "refs/heads/" + branch);
         payload.put("sha", sha);
 
+        // GitHub creates branches through the Git References API.
         HttpRequest request = requestBuilder(
                 URI.create(repositoryApiUrl() + "/git/refs")
         )
@@ -91,12 +103,18 @@ public class GitHubClient {
         return parseReference(response.body());
     }
 
+    /**
+     * Returns the configured repository in owner/repository format.
+     */
     public String qualifiedRepository() {
         return properties.getOwner().trim()
                 + "/"
                 + properties.getRepository().trim();
     }
 
+    /**
+     * Creates a request builder with headers required by every GitHub API call.
+     */
     private HttpRequest.Builder requestBuilder(URI uri) {
         return HttpRequest.newBuilder()
                 .uri(uri)
@@ -112,6 +130,9 @@ public class GitHubClient {
                 );
     }
 
+    /**
+     * Sends an HTTP request and converts transport failures into domain errors.
+     */
     private HttpResponse<String> send(HttpRequest request) {
         try {
             return httpClient.send(
@@ -124,6 +145,7 @@ public class GitHubClient {
                     error
             );
         } catch (InterruptedException error) {
+            // Preserve the interrupted state so higher-level code can observe it.
             Thread.currentThread().interrupt();
             throw new GitHubApiException(
                     "GitHub request was interrupted.",
@@ -132,6 +154,9 @@ public class GitHubClient {
         }
     }
 
+    /**
+     * Converts a GitHub reference JSON response into an immutable Java record.
+     */
     private GitHubBranchReference parseReference(String responseBody) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
@@ -139,6 +164,7 @@ public class GitHubClient {
             String sha = root.path("object").path("sha").asText();
             String url = root.path("url").asText();
 
+            // A successful response without a ref or SHA cannot be trusted.
             if (ref.isBlank() || sha.isBlank()) {
                 throw new GitHubApiException(
                         502,
@@ -155,6 +181,9 @@ public class GitHubClient {
         }
     }
 
+    /**
+     * Verifies that GitHub returned the status expected for an API operation.
+     */
     private void requireStatus(
             HttpResponse<String> response,
             int expectedStatus,
@@ -175,6 +204,9 @@ public class GitHubClient {
         );
     }
 
+    /**
+     * Builds the base API URL for the configured GitHub repository.
+     */
     private String repositoryApiUrl() {
         return removeTrailingSlash(properties.getApiBaseUrl())
                 + "/repos/"
@@ -183,11 +215,17 @@ public class GitHubClient {
                 + encodePathValue(properties.getRepository().trim());
     }
 
+    /**
+     * Percent-encodes a dynamic value before placing it in a URL path.
+     */
     private String encodePathValue(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8)
                 .replace("+", "%20");
     }
 
+    /**
+     * Removes trailing slashes so URL segments can be joined consistently.
+     */
     private String removeTrailingSlash(String value) {
         String normalized = value == null ? "" : value.trim();
 
@@ -201,6 +239,9 @@ public class GitHubClient {
         return normalized;
     }
 
+    /**
+     * Serializes a branch creation payload into JSON for GitHub.
+     */
     private String toJson(Map<String, String> payload) {
         try {
             return objectMapper.writeValueAsString(payload);
@@ -212,6 +253,9 @@ public class GitHubClient {
         }
     }
 
+    /**
+     * Ensures all required GitHub connection settings are available.
+     */
     private void validateConfiguration() {
         if (properties.getToken() == null
                 || properties.getToken().isBlank()) {
@@ -236,6 +280,9 @@ public class GitHubClient {
         }
     }
 
+    /**
+     * Rejects missing or obviously unsafe Git branch names.
+     */
     private void validateBranch(String branch) {
         if (branch == null || branch.isBlank()) {
             throw new IllegalArgumentException(
@@ -252,6 +299,9 @@ public class GitHubClient {
         }
     }
 
+    /**
+     * Produces a bounded, single-line GitHub error body for safe diagnostics.
+     */
     private String safeErrorBody(String body) {
         if (body == null || body.isBlank()) {
             return "No response body";
