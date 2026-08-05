@@ -31,6 +31,7 @@ dependencies {
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
+	implementation 'io.github.java-diff-utils:java-diff-utils:4.17'
 }
 
 tasks.named('test') {
