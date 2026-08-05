@@ -17,6 +17,10 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class GitHubClient {
@@ -242,7 +246,7 @@ public class GitHubClient {
     /**
      * Serializes a branch creation payload into JSON for GitHub.
      */
-    private String toJson(Map<String, String> payload) {
+    private String toJson(Object payload) {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException error) {
@@ -316,4 +320,253 @@ public class GitHubClient {
         return normalized.substring(0, MAX_ERROR_BODY_LENGTH)
                 + "...";
     }
+
+    /**
+     *  Reads a Git commit object so the workflow can obtain its tree and parents
+     */
+    public GitHubCommitObject getCommit(String commitSha){
+        validateConfiguration();
+
+        if (commitSha == null || commitSha.isBlank()){
+            throw new IllegalArgumentException("A commit SHA is required.");
+        }
+        URI uri = URI.create(
+                repositoryApiUrl()
+                        + "/git/commits/"
+                        + encodePathValue(commitSha)
+        );
+
+        HttpResponse<String> response = send(
+                requestBuilder(uri).GET().build()
+        );
+
+        requireStatus(response, 200, "read GitHub commit");
+        return parseCommit(response.body());
+    }
+
+    /**
+     * Reads one UTF-8 text file from an exact Git commit.
+     */
+    public GitHubFileContent getFile(String path, String ref) {
+        validateConfiguration();
+
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("A repository file path is required.");
+        }
+
+        if (ref == null || ref.isBlank()) {
+            throw new IllegalArgumentException("A Git reference is required.");
+        }
+
+        URI uri = URI.create(
+                repositoryApiUrl()
+                        + "/contents/"
+                        + encodeRepositoryPath(path)
+                        + "?ref="
+                        + encodePathValue(ref)
+        );
+
+        HttpResponse<String> response = send(
+                requestBuilder(uri).GET().build()
+        );
+
+        requireStatus(response, 200, "read GitHub file");
+        return parseFile(response.body(), path);
+    }
+
+    /**
+     * Creates a Git tree based on an existing tree with one replaced text file.
+     */
+    public GitHubTreeReference createTree(
+            String baseTreeSha,
+            MaterializedPatchFile file
+    ) {
+        validateConfiguration();
+
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("path", file.path());
+        entry.put("mode", "100644");
+        entry.put("type", "blob");
+        entry.put("content", file.content());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("base_tree", baseTreeSha);
+        payload.put("tree", List.of(entry));
+
+        HttpRequest request = requestBuilder(
+                URI.create(repositoryApiUrl() + "/git/trees")
+        )
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(toJson(payload)))
+                .build();
+
+        HttpResponse<String> response = send(request);
+        requireStatus(response, 201, "create GitHub tree");
+
+        return new GitHubTreeReference(
+                requiredText(response.body(), "sha")
+        );
+    }
+
+    /**
+     * Creates a Git commit whose parent is the current AI branch head.
+     */
+    public GitHubCommitObject createCommit(
+            String message,
+            String treeSha,
+            String parentSha
+    ) {
+        validateConfiguration();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("message", message);
+        payload.put("tree", treeSha);
+        payload.put("parents", List.of(parentSha));
+
+        HttpRequest request = requestBuilder(
+                URI.create(repositoryApiUrl() + "/git/commits")
+        )
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(toJson(payload)))
+                .build();
+
+        HttpResponse<String> response = send(request);
+        requireStatus(response, 201, "create GitHub commit");
+        return parseCommit(response.body());
+    }
+
+    /**
+     * Moves a branch to a new commit using a non-force, fast-forward update.
+     */
+    public GitHubBranchReference updateBranch(
+            String branch,
+            String commitSha
+    ) {
+        validateConfiguration();
+        validateBranch(branch);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sha", commitSha);
+        payload.put("force", false);
+
+        HttpRequest request = requestBuilder(
+                URI.create(
+                        repositoryApiUrl()
+                                + "/git/refs/heads/"
+                                + encodePathValue(branch)
+                )
+        )
+                .header("Content-Type", "application/json")
+                .method(
+                        "PATCH",
+                        HttpRequest.BodyPublishers.ofString(toJson(payload))
+                )
+                .build();
+
+        HttpResponse<String> response = send(request);
+        requireStatus(response, 200, "update GitHub branch");
+        return parseReference(response.body());
+    }
+
+    private GitHubCommitObject parseCommit(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            String sha = root.path("sha").asText();
+            String treeSha = root.path("tree").path("sha").asText();
+            String message = root.path("message").asText();
+
+            List<String> parentShas = new ArrayList<>();
+            root.path("parents").forEach(parent ->
+                    parentShas.add(parent.path("sha").asText())
+            );
+
+            if (sha.isBlank() || treeSha.isBlank()) {
+                throw new GitHubApiException(
+                        502,
+                        "GitHub returned an invalid commit response."
+                );
+            }
+
+            return new GitHubCommitObject(
+                    sha,
+                    treeSha,
+                    message,
+                    List.copyOf(parentShas)
+            );
+        } catch (JsonProcessingException error) {
+            throw new GitHubApiException(
+                    "Could not parse the GitHub commit response.",
+                    error
+            );
+        }
+    }
+
+    private GitHubFileContent parseFile(
+            String responseBody,
+            String expectedPath
+    ) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            String path = root.path("path").asText();
+            String blobSha = root.path("sha").asText();
+            String encoding = root.path("encoding").asText();
+            String encodedContent = root.path("content").asText();
+
+            if (!"base64".equalsIgnoreCase(encoding)) {
+                throw new GitHubApiException(
+                        502,
+                        "GitHub returned an unsupported file encoding."
+                );
+            }
+
+            String content = new String(
+                    Base64.getMimeDecoder().decode(encodedContent),
+                    StandardCharsets.UTF_8
+            );
+
+            if (!expectedPath.equals(path) || blobSha.isBlank()) {
+                throw new GitHubApiException(
+                        502,
+                        "GitHub returned an unexpected file response."
+                );
+            }
+
+            return new GitHubFileContent(path, blobSha, content);
+        } catch (JsonProcessingException | IllegalArgumentException error) {
+            throw new GitHubApiException(
+                    "Could not parse the GitHub file response.",
+                    error
+            );
+        }
+    }
+
+    private String requiredText(String responseBody, String field) {
+        try {
+            String value = objectMapper.readTree(responseBody)
+                    .path(field)
+                    .asText();
+
+            if (value.isBlank()) {
+                throw new GitHubApiException(
+                        502,
+                        "GitHub response is missing field: " + field
+                );
+            }
+
+            return value;
+        } catch (JsonProcessingException error) {
+            throw new GitHubApiException(
+                    "Could not parse the GitHub response.",
+                    error
+            );
+        }
+    }
+
+    private String encodeRepositoryPath(String path) {
+        return List.of(path.split("/"))
+                .stream()
+                .map(this::encodePathValue)
+                .collect(Collectors.joining("/"));
+    }
+
 }
