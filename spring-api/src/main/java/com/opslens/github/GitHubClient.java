@@ -468,6 +468,7 @@ public class GitHubClient {
         return parseReference(response.body());
     }
 
+
     private GitHubCommitObject parseCommit(String responseBody) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
