@@ -1,12 +1,10 @@
 package com.opslens.controller;
 
 import com.opslens.dto.CreatePullRequestBranchResponse;
+import com.opslens.dto.CreatePullRequestCommitResponse;
 import com.opslens.dto.PullRequestPreflightResponse;
 import com.opslens.github.GitHubApiException;
-import com.opslens.service.PullRequestBlockedException;
-import com.opslens.service.PullRequestBranchConflictException;
-import com.opslens.service.PullRequestBranchService;
-import com.opslens.service.PullRequestPreflightService;
+import com.opslens.service.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -25,13 +23,16 @@ public class PullRequestController {
 
     private final PullRequestPreflightService preflightService;
     private final PullRequestBranchService branchService;
+    private final PullRequestCommitService commitService;
 
     public PullRequestController(
             PullRequestPreflightService preflightService,
-            PullRequestBranchService branchService
+            PullRequestBranchService branchService,
+            PullRequestCommitService commitService
     ) {
         this.preflightService = preflightService;
         this.branchService = branchService;
+        this.commitService =commitService;
     }
 
     @GetMapping("/{id}/pull-request/preflight")
@@ -50,6 +51,21 @@ public class PullRequestController {
 
         if (response.isCreated()) {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/pull-request/commit")
+    public ResponseEntity<CreatePullRequestCommitResponse> createCommit(
+            @PathVariable Long id
+    ) {
+        CreatePullRequestCommitResponse response = commitService.createCommit(id);
+
+        if (response.isCreated()) {
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(response);
         }
 
         return ResponseEntity.ok(response);
@@ -94,6 +110,17 @@ public class PullRequestController {
     ) {
         return errorResponse(
                 HttpStatus.BAD_GATEWAY,
+                error.getMessage(),
+                null
+        );
+    }
+
+    @ExceptionHandler(PatchMaterializationException.class)
+    public ResponseEntity<Map<String, Object>> handlePatchMaterialization(
+            PatchMaterializationException error
+    ) {
+        return errorResponse(
+                HttpStatus.UNPROCESSABLE_CONTENT,
                 error.getMessage(),
                 null
         );
