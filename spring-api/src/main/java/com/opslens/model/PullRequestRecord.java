@@ -83,6 +83,8 @@ public class PullRequestRecord {
     @PrePersist
     public void onCreate() {
         LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
     }
 
     // JPA automatically call this method when it notic the entity is updated
