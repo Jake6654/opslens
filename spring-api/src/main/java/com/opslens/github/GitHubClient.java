@@ -468,6 +468,167 @@ public class GitHubClient {
         return parseReference(response.body());
     }
 
+    public Optional<GitHubPullRequest> findOpenPullRequest(
+            String headBranch,
+            String baseBranch
+    ) {
+        validateConfiguration();
+        validateBranch(headBranch);
+        validateBranch(baseBranch);
+
+
+        // GitHub head filter like Jake6654:ai-fix/inc-15-patch-20
+        String qualifiedHead = properties.getOwner().trim()
+                + ":"
+                + headBranch;
+
+        // 조회 url 만들기
+        /**
+         * GET /repos/Jake6654/sketch-my-day/pulls
+         *     ?state=open
+         *     &head=Jake6654:ai-fix/inc-15-patch-20
+         *     &base=main
+         *     &per_page=1 (하나만 필요)
+         */
+        URI uri = URI.create(
+                repositoryApiUrl()
+                        + "/pulls?state=open"
+                        + "&head=" + encodeQueryValue(qualifiedHead)
+                        + "&base=" + encodeQueryValue(baseBranch)
+                        + "&per_page=1"
+        );
+
+        HttpRequest request = requestBuilder(uri)
+                .GET()
+                .build();
+
+        HttpResponse<String> response = send(request);
+        // if it returns the different state, returns GitHubApiException
+        requireStatus(response, 200, "find existing GitHub pull request");
+
+        try {
+            JsonNode root = objectMapper.readTree(response.body());
+
+            if (!root.isArray()) {
+                throw new GitHubApiException(
+                        502,
+                        "GitHub returned an invalid pull request list."
+                );
+            }
+
+            if (root.isEmpty()) {
+                return Optional.empty();
+            }
+
+            return Optional.of(parsePullRequest(root.get(0)));
+        } catch (JsonProcessingException error) {
+            throw new GitHubApiException(
+                    "Could not parse the GitHub pull request list.",
+                    error
+            );
+        }
+    }
+
+    public GitHubPullRequest createPullRequest(
+            String title,
+            String body,
+            String headBranch,
+            String baseBranch,
+            boolean draft
+    ) {
+        validateConfiguration();
+        validateBranch(headBranch);
+        validateBranch(baseBranch);
+
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Pull request title is required."
+            );
+        }
+
+        if (headBranch.equals(baseBranch)) {
+            throw new IllegalArgumentException(
+                    "Pull request head and base branches must be different."
+            );
+        }
+
+        // create GitHub payload
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("title", title);
+        payload.put("body", body == null ? "" : body);
+        payload.put("head", headBranch);
+        payload.put("base", baseBranch);
+        payload.put("draft", draft);
+
+        HttpRequest request = requestBuilder(
+                URI.create(repositoryApiUrl() + "/pulls")
+        )
+                .header("Content-Type", "application/json")
+                // toJson returns Java Map into JSON
+                .POST(HttpRequest.BodyPublishers.ofString(toJson(payload)))
+                .build();
+
+        HttpResponse<String> response = send(request);
+        requireStatus(response, 201, "create GitHub pull request");
+
+        try {
+            // Deserialize JSON into a JsonNode -> GitHubPullRequest
+            JsonNode root = objectMapper.readTree(response.body());
+            return parsePullRequest(root);
+        } catch (JsonProcessingException error) {
+            throw new GitHubApiException(
+                    "Could not parse the created GitHub pull request.",
+                    error
+            );
+        }
+    }
+
+    private String encodeQueryValue(String value) {
+        return URLEncoder.encode(
+                value,
+                StandardCharsets.UTF_8
+        );
+    }
+
+
+    private GitHubPullRequest parsePullRequest(JsonNode root) {
+        long number = root.path("number").asLong();
+        String apiUrl = root.path("url").asText();
+        String htmlUrl = root.path("html_url").asText();
+        String state = root.path("state").asText();
+        String title = root.path("title").asText();
+        boolean draft = root.path("draft").asBoolean(false);
+        String headBranch = root.path("head").path("ref").asText();
+        String headSha = root.path("head").path("sha").asText();
+        String baseBranch = root.path("base").path("ref").asText();
+
+        if (number <= 0
+                || htmlUrl.isBlank()
+                || state.isBlank()
+                || headBranch.isBlank()
+                || headSha.isBlank()
+                || baseBranch.isBlank()) {
+            throw new GitHubApiException(
+                    502,
+                    "GitHub returned an invalid pull request response."
+            );
+        }
+
+        return new GitHubPullRequest(
+                number,
+                apiUrl,
+                htmlUrl,
+                state,
+                title,
+                draft,
+                headBranch,
+                headSha,
+                baseBranch
+        );
+    }
+
+
+
 
     private GitHubCommitObject parseCommit(String responseBody) {
         try {
