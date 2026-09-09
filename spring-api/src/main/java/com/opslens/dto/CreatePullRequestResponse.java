@@ -17,8 +17,8 @@ public class CreatePullRequestResponse {
     private final boolean created;
     private final LocalDateTime createdAt;
 
-    public CreatePullRequestResponse(Long patchSuggestionsId, Long incidentId, String repository, String baseBranch, String headBranch, String commitSha, Long pullRequestNumber, String pullRequestUrl, String pullRequestState, String operationStatus, boolean created, LocalDateTime createdAt) {
-        this.patchSuggestionId = patchSuggestionsId;
+    public CreatePullRequestResponse(Long patchSuggestionId, Long incidentId, String repository, String baseBranch, String headBranch, String commitSha, Long pullRequestNumber, String pullRequestUrl, String pullRequestState, String operationStatus, boolean created, LocalDateTime createdAt) {
+        this.patchSuggestionId = patchSuggestionId;
         this.incidentId = incidentId;
         this.repository = repository;
         this.baseBranch = baseBranch;
@@ -45,7 +45,7 @@ public class CreatePullRequestResponse {
         return operationStatus;
     }
 
-    public Long getPatchSuggestionsId() {
+    public Long getPatchSuggestionId() {
         return patchSuggestionId;
     }
 
