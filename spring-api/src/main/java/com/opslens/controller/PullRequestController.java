@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.opslens.dto.CreatePullRequestResponse;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,15 +25,18 @@ public class PullRequestController {
     private final PullRequestPreflightService preflightService;
     private final PullRequestBranchService branchService;
     private final PullRequestCommitService commitService;
+    private final PullRequestCreationService creationService;
 
     public PullRequestController(
             PullRequestPreflightService preflightService,
             PullRequestBranchService branchService,
-            PullRequestCommitService commitService
+            PullRequestCommitService commitService,
+            PullRequestCreationService creationService
     ) {
         this.preflightService = preflightService;
         this.branchService = branchService;
         this.commitService =commitService;
+        this.creationService= creationService;
     }
 
     @GetMapping("/{id}/pull-request/preflight")
@@ -68,6 +72,23 @@ public class PullRequestController {
                     .body(response);
         }
 
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/pull-request")
+    public ResponseEntity<CreatePullRequestResponse> createPullRequest(
+            @PathVariable Long id
+    ) {
+        CreatePullRequestResponse response = creationService.createPullRequest(id);
+
+        // 처음에 created 되면 return 201 Created
+        if (response.isCreated()) {
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(response);
+        }
+
+        // if the PR exists, return 200 OK
         return ResponseEntity.ok(response);
     }
 
