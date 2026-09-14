@@ -2,6 +2,9 @@ package com.opslens.github;
 
 
 /**
+ *  Represents the GitHub pull request fields used by OpsLens
+ *  A record is an immutable data carrier. Java automatically provides a constructor,
+ *  accessors, equals(), hashCode(), and to String().
  * {
  *   "number": 42,
  *   "url": "https://api.github.com/repos/Jake6654/sketch-my-day/pulls/42",
@@ -25,6 +28,7 @@ public record GitHubPullRequest (
         String state,
         String title,
         boolean draft,
+        boolean merged,
         String headBranch,
         String headSha,
         String baseBranch

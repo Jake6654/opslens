@@ -87,14 +87,33 @@ public class PullRequestRecord {
         this.updatedAt = now;
     }
 
-    // JPA automatically call this method when it notic the entity is updated
+    // JPA automatically call this method when it notices the entity is updated
     @PreUpdate
     public void onUpdate(){
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void updateStatus(String status){
+    /**
+     * Applies the latest state read from GitHub.
+     */
+    public void synchronizeGitHubState(
+            String status,
+            String commitSha
+    ) {
+        if (status == null || status.isBlank()) {
+            throw  new IllegalArgumentException(
+                    "Pull request status is required"
+            );
+        }
+
+        if (commitSha == null || commitSha.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Pull request head SHA is required."
+            );
+        }
+
         this.status = status;
+        this.commitSha = commitSha;
     }
 
     public Long getId() {
