@@ -583,6 +583,50 @@ public class GitHubClient {
         }
     }
 
+    /**
+     * Loads one pull request from the configured GitHub repository
+     */
+    public GitHubPullRequest getPullRequest(Long pullRequestNumber) {
+
+        // check whether GitHub token, owner, repo are set properly
+        validateConfiguration();
+
+        if (pullRequestNumber == null || pullRequestNumber <= 0) {
+            throw new IllegalArgumentException(
+                    "A valid pull request number is required."
+            );
+        }
+
+        // https://api.github.com/repos/Jake6654/sketch-my-day/pulls/27
+        URI uri = URI.create(
+                repositoryApiUrl()
+                        + "/pulls/"
+                        + pullRequestNumber
+        );
+
+        HttpRequest request = requestBuilder(uri)
+                .GET()
+                .build();
+
+        HttpResponse<String> response = send(request);
+
+        requireStatus(
+                response,
+                200,
+                "read GitHub pull request"
+        );
+
+        try {
+            JsonNode root = objectMapper.readTree(response.body());
+            return parsePullRequest(root);
+        } catch (JsonProcessingException error) {
+            throw new GitHubApiException(
+                    "Could not parse the GitHub pull request response.",
+                    error
+            );
+        }
+    }
+
     private String encodeQueryValue(String value) {
         return URLEncoder.encode(
                 value,
@@ -592,11 +636,13 @@ public class GitHubClient {
 
 
     private GitHubPullRequest parsePullRequest(JsonNode root) {
+        // path 을 사용하면 field 가 없어도 null 을 반환하지 않고 missing node 을 반환한다
         long number = root.path("number").asLong();
         String apiUrl = root.path("url").asText();
         String htmlUrl = root.path("html_url").asText();
         String state = root.path("state").asText();
         String title = root.path("title").asText();
+        boolean merged = root.path("merged").asBoolean(false);
         boolean draft = root.path("draft").asBoolean(false);
         String headBranch = root.path("head").path("ref").asText();
         String headSha = root.path("head").path("sha").asText();
@@ -621,6 +667,7 @@ public class GitHubClient {
                 state,
                 title,
                 draft,
+                merged,
                 headBranch,
                 headSha,
                 baseBranch

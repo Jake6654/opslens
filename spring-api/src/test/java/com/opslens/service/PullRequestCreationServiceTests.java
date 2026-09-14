@@ -366,6 +366,7 @@ class PullRequestCreationServiceTests {
                 "open",
                 "[OpsLens] Fix incident #15",
                 true,
+                false,
                 "ai-fix/inc-15-patch-20",
                 "patch-sha",
                 "main"
