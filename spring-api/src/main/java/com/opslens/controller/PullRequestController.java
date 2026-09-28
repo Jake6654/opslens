@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.opslens.dto.CreatePullRequestResponse;
+import com.opslens.dto.PullRequestStatusResponse;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,17 +27,20 @@ public class PullRequestController {
     private final PullRequestBranchService branchService;
     private final PullRequestCommitService commitService;
     private final PullRequestCreationService creationService;
+    private final PullRequestStatusService statusService;
 
     public PullRequestController(
             PullRequestPreflightService preflightService,
             PullRequestBranchService branchService,
             PullRequestCommitService commitService,
-            PullRequestCreationService creationService
+            PullRequestCreationService creationService,
+            PullRequestStatusService statusService
     ) {
         this.preflightService = preflightService;
         this.branchService = branchService;
         this.commitService =commitService;
         this.creationService= creationService;
+        this.statusService = statusService;
     }
 
     @GetMapping("/{id}/pull-request/preflight")
@@ -92,6 +96,26 @@ public class PullRequestController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("{id}/pull-request/status")
+    public ResponseEntity<PullRequestStatusResponse> getPullRequestStatus(
+            @PathVariable Long id
+    ) {
+        PullRequestStatusResponse response = statusService.getStoredStatus(id);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // GitHub 상태 동기화
+    @PostMapping("/{id}/pull-request/status/refresh")
+    public ResponseEntity<PullRequestStatusResponse> refreshPullRequestStatus(
+            @PathVariable Long id
+    ) {
+        PullRequestStatusResponse response = statusService.synchronize(id);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // DB 에서 해당 Patch suggestion 의 PR record 을 찾지 못하면 404
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(
             IllegalArgumentException error
@@ -102,6 +126,7 @@ public class PullRequestController {
                 null
         );
     }
+
 
     @ExceptionHandler(PullRequestBlockedException.class)
     public ResponseEntity<Map<String, Object>> handleBlocked(
@@ -114,6 +139,7 @@ public class PullRequestController {
         );
     }
 
+    // DB와 GitHub의 repository, PR 번호 또는 branch 정보가 다르면 409 Conflict를 반환합니다.
     @ExceptionHandler(PullRequestBranchConflictException.class)
     public ResponseEntity<Map<String, Object>> handleBranchConflict(
             PullRequestBranchConflictException error

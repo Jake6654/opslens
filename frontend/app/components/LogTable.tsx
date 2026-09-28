@@ -101,7 +101,7 @@ export default function LogTable({ logs }: LogTableProps) {
                   <td className="px-5 py-4">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getBadgeClass(
-                        log.level
+                        log.level,
                       )}`}
                     >
                       {log.level}
