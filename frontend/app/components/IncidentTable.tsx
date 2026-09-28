@@ -93,14 +93,29 @@ type PatchVerification = {
   blockers: string[];
 };
 
+type PullRequestStatus = {
+  patchSuggestionId: number;
+  incidentId: number;
+  repository: string;
+  baseBranch: string;
+  headBranch: string;
+  commitSha: string;
+  pullRequestNumber: number;
+  pullRequestUrl: string;
+  status: string;
+  refreshedFromGitHub: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type DetailTab = "report" | "code" | "patches";
 
 export default function IncidentTable({ incidents }: IncidentTableProps) {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(
-    null
+    null,
   );
   const [selectedReport, setSelectedReport] = useState<IncidentReport | null>(
-    null
+    null,
   );
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -111,7 +126,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   const [isCodeSearchLoading, setIsCodeSearchLoading] = useState(false);
   const [codeSearchError, setCodeSearchError] = useState("");
   const [patchSuggestions, setPatchSuggestions] = useState<PatchSuggestion[]>(
-    []
+    [],
   );
   const [isPatchLoading, setIsPatchLoading] = useState(false);
   const [patchError, setPatchError] = useState("");
@@ -125,7 +140,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
   // save where is currently a test running at
   const [runningTestPatchId, setRunningTestPatchId] = useState<number | null>(
-    null
+    null,
   );
 
   // save error messages
@@ -137,6 +152,17 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
   const [verificationByPatchId, setVerificationByPatchId] = useState<
     Record<number, PatchVerification>
+  >({});
+
+  const [pullRequestStatusByPatchId, setPullRequestStatusByPatchId] = useState<
+    Record<number, PullRequestStatus | null>
+  >({});
+
+  const [refreshingPullRequestPatchId, setRefreshingPullRequestPatchId] =
+    useState<number | null>(null);
+
+  const [pullRequestErrorByPatchId, setPullRequestErrorByPatchId] = useState<
+    Record<number, string>
   >({});
 
   async function handleIncidentClick(incident: Incident) {
@@ -158,6 +184,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       setTestRunError("");
       setTestFailureAnalysesByRunId({});
       setVerificationByPatchId({});
+      setPullRequestStatusByPatchId({});
+      setRefreshingPullRequestPatchId(null);
+      setPullRequestErrorByPatchId({});
 
       const response = await fetch(`/api/incidents/${incident.id}/report`);
 
@@ -226,7 +255,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
   async function fetchPatchSuggestions(incidentId: number) {
     const response = await fetch(
-      `/api/incidents/${incidentId}/patch-suggestions`
+      `/api/incidents/${incidentId}/patch-suggestions`,
     );
 
     if (!response.ok) {
@@ -241,8 +270,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
         Promise.all([
           fetchTestRuns(patch.id),
           fetchPatchVerification(patch.id),
-        ])
-      )
+          fetchPullRequestStatus(patch.id),
+        ]),
+      ),
     );
   }
 
@@ -257,7 +287,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
         `/api/incidents/${selectedIncident.id}/suggest-patch`,
         {
           method: "POST",
-        }
+        },
       );
 
       if (!response.ok) {
@@ -274,7 +304,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
   async function fetchTestRuns(patchSuggestionId: number) {
     const response = await fetch(
-      `/api/patch-suggestions/${patchSuggestionId}/test-runs`
+      `/api/patch-suggestions/${patchSuggestionId}/test-runs`,
     );
 
     if (!response.ok) {
@@ -289,7 +319,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     }));
 
     await Promise.all(
-      data.map((testRun) => fetchTestFailureAnalysis(testRun.id))
+      data.map((testRun) => fetchTestFailureAnalysis(testRun.id)),
     );
   }
 
@@ -318,7 +348,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
 
   async function fetchPatchVerification(patchSuggestionId: number) {
     const response = await fetch(
-      `/api/patch-suggestions/${patchSuggestionId}/verification`
+      `/api/patch-suggestions/${patchSuggestionId}/verification`,
     );
 
     if (!response.ok) {
@@ -333,6 +363,79 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     }));
   }
 
+  async function fetchPullRequestStatus(patchSuggestionId: number) {
+    try {
+      setPullRequestErrorByPatchId((previous) => ({
+        ...previous,
+        [patchSuggestionId]: "",
+      }));
+
+      const response = await fetch(
+        `/api/patch-suggestions/${patchSuggestionId}/pull-request/status`,
+      );
+
+      if (response.status === 404) {
+        setPullRequestStatusByPatchId((previous) => ({
+          ...previous,
+          [patchSuggestionId]: null,
+        }));
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch pull request status");
+      }
+
+      const data: PullRequestStatus = await response.json();
+
+      setPullRequestStatusByPatchId((previous) => ({
+        ...previous,
+        [patchSuggestionId]: data,
+      }));
+    } catch {
+      setPullRequestErrorByPatchId((previous) => ({
+        ...previous,
+        [patchSuggestionId]: "Could not load pull request status.",
+      }));
+    }
+  }
+
+  async function refreshPullRequestStatus(patchSuggestionId: number) {
+    try {
+      setRefreshingPullRequestPatchId(patchSuggestionId);
+
+      setPullRequestErrorByPatchId((previous) => ({
+        ...previous,
+        [patchSuggestionId]: "",
+      }));
+
+      const response = await fetch(
+        `/api/patch-suggestions/${patchSuggestionId}/pull-request/status/refresh`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to refresh pull request status");
+      }
+
+      const data: PullRequestStatus = await response.json();
+
+      setPullRequestStatusByPatchId((previous) => ({
+        ...previous,
+        [patchSuggestionId]: data,
+      }));
+    } catch {
+      setPullRequestErrorByPatchId((previous) => ({
+        ...previous,
+        [patchSuggestionId]: "Could not refresh pull request status.",
+      }));
+    } finally {
+      setRefreshingPullRequestPatchId(null);
+    }
+  }
+
   async function handleRunTests(patchSuggestionId: number) {
     try {
       setRunningTestPatchId(patchSuggestionId);
@@ -342,7 +445,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
         `/api/patch-suggestions/${patchSuggestionId}/run-tests`,
         {
           method: "POST",
-        }
+        },
       );
 
       if (!response.ok) {
@@ -352,6 +455,7 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
       await Promise.all([
         fetchTestRuns(patchSuggestionId),
         fetchPatchVerification(patchSuggestionId),
+        fetchPullRequestStatus(patchSuggestionId),
       ]);
     } catch {
       setTestRunError("Could not run tests.");
@@ -373,6 +477,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
     setTestRunError("");
     setTestFailureAnalysesByRunId({});
     setVerificationByPatchId({});
+    setPullRequestStatusByPatchId({});
+    setRefreshingPullRequestPatchId(null);
+    setPullRequestErrorByPatchId({});
     setActiveTab("report");
     setError("");
   }
@@ -617,6 +724,15 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                       {patchSuggestions.map((patch) => {
                         const testRuns = testRunsByPatchId[patch.id] ?? [];
                         const verification = verificationByPatchId[patch.id];
+                        const pullRequestStatus =
+                          pullRequestStatusByPatchId[patch.id];
+                        const pullRequestError =
+                          pullRequestErrorByPatchId[patch.id];
+                        const hasLoadedPullRequestStatus =
+                          Object.prototype.hasOwnProperty.call(
+                            pullRequestStatusByPatchId,
+                            patch.id,
+                          );
 
                         return (
                           <article
@@ -655,6 +771,33 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                               </button>
                             </div>
 
+                            {pullRequestStatus && (
+                              <PullRequestStatusPanel
+                                status={pullRequestStatus}
+                                isRefreshing={
+                                  refreshingPullRequestPatchId === patch.id
+                                }
+                                error={pullRequestError}
+                                onRefresh={() =>
+                                  refreshPullRequestStatus(patch.id)
+                                }
+                              />
+                            )}
+
+                            {hasLoadedPullRequestStatus &&
+                              pullRequestStatus === null && (
+                                <p className="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-500">
+                                  No pull request has been created for this
+                                  patch.
+                                </p>
+                              )}
+
+                            {pullRequestError && !pullRequestStatus && (
+                              <p className="mt-4 border-t border-red-200 pt-4 text-sm text-red-700">
+                                {pullRequestError}
+                              </p>
+                            )}
+
                             {patch.patchValid === false &&
                               patch.patchValidationOutput && (
                                 <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3">
@@ -668,7 +811,9 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
                               )}
 
                             <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">
-                              <code>{patch.suggestedDiff || "No diff returned."}</code>
+                              <code>
+                                {patch.suggestedDiff || "No diff returned."}
+                              </code>
                             </pre>
 
                             <div className="mt-4 border-t border-gray-200 pt-4">
@@ -709,21 +854,20 @@ export default function IncidentTable({ incidents }: IncidentTableProps) {
   );
 }
 
-
 function PatchValidationStatus({ patch }: { patch: PatchSuggestion }) {
   const validationClassName =
     patch.patchValid === true
       ? "border-green-200 bg-green-50 text-green-700"
       : patch.patchValid === false
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "border-gray-200 bg-white text-gray-500";
+        ? "border-red-200 bg-red-50 text-red-700"
+        : "border-gray-200 bg-white text-gray-500";
 
   const validationLabel =
     patch.patchValid === true
       ? "Patch validation: Valid"
       : patch.patchValid === false
-      ? "Patch validation: Invalid"
-      : "Patch validation: Not checked";
+        ? "Patch validation: Invalid"
+        : "Patch validation: Not checked";
 
   return (
     <p
@@ -750,7 +894,9 @@ function PatchReadinessStatus({
       }`}
     >
       <p className="text-xs font-semibold uppercase">
-        {ready ? "Ready for Pull Request" : `PR blocked: ${verification.status}`}
+        {ready
+          ? "Ready for Pull Request"
+          : `PR blocked: ${verification.status}`}
       </p>
 
       {!ready && verification.blockers.length > 0 && (
@@ -761,6 +907,70 @@ function PatchReadinessStatus({
         </ul>
       )}
     </div>
+  );
+}
+
+function PullRequestStatusPanel({
+  status,
+  isRefreshing,
+  error,
+  onRefresh,
+}: {
+  status: PullRequestStatus;
+  isRefreshing: boolean;
+  error?: string;
+  onRefresh: () => void;
+}) {
+  const statusClassName =
+    status.status === "OPEN"
+      ? "border-green-200 bg-green-50 text-green-700"
+      : status.status === "MERGED"
+        ? "border-purple-200 bg-purple-50 text-purple-700"
+        : status.status === "CLOSED"
+          ? "border-gray-300 bg-gray-100 text-gray-700"
+          : "border-amber-200 bg-amber-50 text-amber-700";
+
+  return (
+    <section className="mt-4 border-t border-gray-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            Pull Request #{status.pullRequestNumber}
+          </p>
+          <p className="mt-1 break-all text-xs text-gray-500">
+            {status.headBranch} → {status.baseBranch}
+          </p>
+        </div>
+
+        <span
+          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClassName}`}
+        >
+          {status.status}
+        </span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <a
+          href={status.pullRequestUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-blue-700 hover:underline"
+        >
+          Open on GitHub
+        </a>
+
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isRefreshing ? "Refreshing..." : "Refresh from GitHub"}
+        </button>
+      </div>
+
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+    </section>
   );
 }
 
@@ -775,12 +985,12 @@ function TestRunCard({
     testRun.status === "PASSED"
       ? "bg-green-100 text-green-700"
       : testRun.status === "FAILED"
-      ? "bg-red-100 text-red-700"
-      : testRun.status === "ERROR"
-      ? "bg-amber-100 text-amber-700"
-      : testRun.status === "PATCH_APPLY_FAILED"
-      ? "bg-purple-100 text-purple-700"
-      : "bg-gray-100 text-gray-700";
+        ? "bg-red-100 text-red-700"
+        : testRun.status === "ERROR"
+          ? "bg-amber-100 text-amber-700"
+          : testRun.status === "PATCH_APPLY_FAILED"
+            ? "bg-purple-100 text-purple-700"
+            : "bg-gray-100 text-gray-700";
 
   return (
     <div className="rounded-md border border-gray-200 bg-white p-3">
